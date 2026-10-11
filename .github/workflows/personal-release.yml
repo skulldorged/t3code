@@ -393,6 +393,15 @@ jobs:
             -P "$PROJECT_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: \
             -s -k "$PROJECT_PASSWORD" "$keychain" > /dev/null
+          # codesign only selects valid identities. Trust this self-signed
+          # certificate for code signing on the disposable runner, not on recipients.
+          sudo security add-trusted-cert -d -r trustRoot -p codeSign \
+            -k "$keychain" "$signing_dir/certificate.pem"
+          identities="$(security find-identity -v -p codesigning "$keychain")"
+          [[ "$identities" == *"$PROJECT_SHA1"* ]] || {
+            echo "The imported project certificate is not a valid signing identity." >&2
+            exit 1
+          }
           echo "T3CODE_MACOS_SELF_SIGN_IDENTITY=$PROJECT_SHA1" >> "$GITHUB_ENV"
           echo "T3CODE_MACOS_SELF_SIGN_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
       - name: Build desktop package
@@ -439,6 +448,10 @@ jobs:
         run: |
           keychain="$RUNNER_TEMP/t3-project-signing/identity.keychain-db"
           cleanup_status=0
+          certificate="$RUNNER_TEMP/t3-project-signing/certificate.pem"
+          if [[ -f "$certificate" ]]; then
+            sudo security remove-trusted-cert -d "$certificate" || cleanup_status=$?
+          fi
           if [[ -f "$keychain" ]]; then
             security delete-keychain "$keychain" || cleanup_status=$?
           fi
