@@ -414,6 +414,10 @@
     "./source-control-clients": {
       "types": "./src/sourceControlClients.ts",
       "default": "./src/sourceControlClients.ts"
+    },
+    "./review-guide-tour": {
+      "types": "./src/reviewGuideTour.ts",
+      "default": "./src/reviewGuideTour.ts"
     }
   },
   "scripts": {
@@ -422,6 +426,7 @@
   },
   "dependencies": {
     "@novnc/novnc": "1.7.0",
+    "@pierre/diffs": "catalog:",
     "@t3tools/contracts": "workspace:*",
     "@t3tools/shared": "workspace:*",
     "@t3tools/source-control-azure-devops": "workspace:*",

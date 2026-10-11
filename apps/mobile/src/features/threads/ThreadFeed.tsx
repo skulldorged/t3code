@@ -1,7 +1,9 @@
+import { useOpenPullRequest } from "../../native/useOpenPullRequest";
 import { ThreadContextDivider } from "./thread-context-divider";
 import { ThreadHandoffRow } from "./thread-handoff-row";
 import { WorthKnowingRunCard } from "./worth-knowing-card";
 import { SecretRequestCard } from "./SecretRequestCard";
+import { AppActivityIndicator } from "../../components/AppActivityIndicator";
 import {
   WorktreeWorkingHeader,
   WorktreeSetupCard,
@@ -84,7 +86,6 @@ import {
   type PartialMarkdownTheme,
 } from "react-native-nitro-markdown";
 import {
-  ActivityIndicator,
   Alert,
   Image,
   Platform,
@@ -99,6 +100,9 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { useFilePreviewGallery, FilePreviewGallery } from "../../components/FilePreviewGallery";
+import { composerImageGallery } from "../../lib/composerImageGallery";
+import { messageImageGallery } from "./messageImageGallery";
 import { FilePreviewModal, type FilePreviewSource } from "../../components/FilePreviewModal";
 import { isPdfFile } from "../../lib/filePreview";
 import { flattenThemeColor } from "../../lib/mobileTheme";
@@ -194,7 +198,7 @@ import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
 import { resolveThreadFeedFixedItemSize } from "./thread-feed-item-size";
 import { htmlRenderFrameHeight } from "@t3tools/shared/htmlRender";
 import { htmlRenderRowHeight, ThreadHtmlRender } from "./HtmlRenderWebView";
-import { mcpAppRowHeight, ThreadMcpApp } from "./McpAppWebView";
+import { ThreadMcpApp } from "./McpAppWebView";
 import { useMarkdownCodeHighlight } from "./markdownCodeHighlightState";
 import {
   assetEnvironment,
@@ -384,7 +388,7 @@ function AssistantForkButton(props: {
       className="h-7 w-7 items-center justify-center disabled:opacity-40"
     >
       {busy ? (
-        <ActivityIndicator size="small" />
+        <AppActivityIndicator size="small" />
       ) : (
         <SymbolView
           name="arrow.triangle.branch"
@@ -405,6 +409,7 @@ function MessageAttachmentImage(props: {
   readonly className: string;
   readonly onPressPreview: (source: FilePreviewSource) => void;
 }) {
+  const withGallery = useFilePreviewGallery();
   const sourceIdentifier = useId();
   const resource = useMemo(
     () => ({
@@ -422,7 +427,7 @@ function MessageAttachmentImage(props: {
   if (uri === null) {
     return (
       <View className={`${props.className} items-center justify-center`}>
-        <ActivityIndicator />
+        <AppActivityIndicator />
       </View>
     );
   }
@@ -434,19 +439,21 @@ function MessageAttachmentImage(props: {
         accessibilityLabel={`Open ${props.name}`}
         onPress={() =>
           // The viewer mints its own URL from the resource so the image survives a refresh.
-          props.onPressPreview({
-            kind: "image",
-            environmentId: props.environmentId,
-            resource,
-            name: props.name,
-            sourceIdentifier,
-            actionsSource: {
-              name: props.name,
-              mimeType: props.mimeType,
+          props.onPressPreview(
+            withGallery({
+              kind: "image",
               environmentId: props.environmentId,
               resource,
-            },
-          })
+              name: props.name,
+              sourceIdentifier,
+              actionsSource: {
+                name: props.name,
+                mimeType: props.mimeType,
+                environmentId: props.environmentId,
+                resource,
+              },
+            }),
+          )
         }
       >
         <Image
@@ -636,7 +643,7 @@ function MessageAttachmentFile(props: {
         >
           <View className="h-12 w-10 shrink-0 items-center justify-center rounded-lg bg-subtle">
             {opening ? (
-              <ActivityIndicator size="small" />
+              <AppActivityIndicator size="small" />
             ) : (
               <PierreEntryIcon path={attachment.name} kind="file" size={26} />
             )}
@@ -1655,6 +1662,7 @@ function renderFeedEntry(
   if (entry.type === "mcp-app") {
     return (
       <ThreadMcpApp
+        key={entry.app.attachmentId}
         environmentId={props.environmentId}
         threadId={entry.sourceThreadId}
         conversationThreadId={props.threadId}
@@ -1823,12 +1831,24 @@ function renderFeedEntry(
                   onPressPreview={props.onPressPreview}
                 />
               ) : attachment.type === "image" ? (
-                <Image
+                <Pressable
                   key={attachment.id}
-                  source={{ uri: attachment.previewUri }}
-                  accessibilityLabel={attachment.name}
-                  style={{ width: 180, height: 140, borderRadius: 14 }}
-                />
+                  accessibilityRole="imagebutton"
+                  accessibilityLabel={`Open ${attachment.name}`}
+                  onPress={() =>
+                    props.onPressPreview({
+                      kind: "image",
+                      name: attachment.name,
+                      uri: attachment.dataUrl ?? attachment.previewUri,
+                      gallery: composerImageGallery(entry.pendingMessage?.attachments ?? []),
+                    })
+                  }
+                >
+                  <Image
+                    source={{ uri: attachment.previewUri }}
+                    style={{ width: 180, height: 140, borderRadius: 14 }}
+                  />
+                </Pressable>
               ) : (
                 <MessageAttachmentUnknown key={attachment.id} name={attachment.name} />
               ),
@@ -2255,6 +2275,7 @@ function ThreadFeedPlaceholder(props: {
 
 export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const usesNativeWorkspaceColumns = useNativeWorkspaceColumnsSupported();
+  const openPullRequest = useOpenPullRequest();
   const navigation = useNavigation();
   const { themeAppearance } = useAppearancePreferences();
   const copyFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2472,10 +2493,10 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
           );
           return;
         }
-        void tryOpenExternalUrl(presentation.href, "markdown-link");
+        void openPullRequest(presentation.href);
       }
     },
-    [props.environmentId, props.threadId, props.workspaceRoot, navigation],
+    [props.environmentId, props.threadId, props.workspaceRoot, navigation, openPullRequest],
   );
   const markdownLinkHandlers = useMemo<MarkdownLinkHandlers>(
     () => ({
@@ -3024,7 +3045,6 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       if (entry.type === "html-render") {
         return htmlRenderRowHeight(htmlRenderFrameHeight(entry.render, contentWidth));
       }
-      if (entry.type === "mcp-app") return mcpAppRowHeight();
       if (workRowSizing.fixedRowHeight === undefined) {
         return undefined;
       }
@@ -3083,52 +3103,59 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
         key={info.item.id}
         entering={disclosureToggleSettling ? THREAD_FEED_DISCLOSURE_ENTER_TRANSITION : undefined}
       >
-        <ThreadMediaVisibility>
-          {renderFeedEntry(info, {
-            environmentId: props.environmentId,
-            dispatchingMessageId: props.dispatchingMessageId,
-            onEditPendingMessage: props.onEditPendingMessage,
-            onUseArtifactTemplate: props.onUseArtifactTemplate,
-            threadId: props.threadId,
-            copiedRowId,
-            expandedWorkRows,
-            workRowSizing,
-            workGroupScrollPositions,
-            terminalAssistantMessageIds,
-            unsettledTurnId,
-            failedRunIds,
-            onCopyWorkRow,
-            onToggleWorkGroup,
-            onToggleWorkRow,
-            onToggleTurnFold,
-            onPressPreview,
-            onPressVideo,
-            markdownLinkHandlers,
-            renderMarkdownImage,
-            renderViewedImage,
-            renderReasoning,
-            iconSubtleColor,
-            screenColor,
-            userBubbleColor,
-            markdownStyles,
-            reviewCommentColors,
-            reviewCommentBubbleWidth,
-            themeAppearance,
-            usesNativeWorkspaceColumns,
-            userBubbleMaxWidth,
-            markdownContentWidth,
-            contentWidth,
-            threadTitle: props.threadTitle,
-            skills: props.skills,
-            workspaceRoot: props.workspaceRoot,
-            delegatedTasks: props.delegatedTasks,
-          })}
-          {props.worktreeSetup && info.index === setupAnchorIndex ? (
-            <WorktreeSetupCard key={props.threadId} {...props.worktreeSetup} />
-          ) : props.setupWorkingStartedAt && info.index === setupAnchorIndex ? (
-            <WorktreeWorkingHeader startedAt={props.setupWorkingStartedAt} />
-          ) : null}
-        </ThreadMediaVisibility>
+        <MessageImageGalleryScope
+          entry={info.item}
+          environmentId={props.environmentId}
+          threadId={props.threadId}
+          workspaceRoot={props.workspaceRoot}
+        >
+          <ThreadMediaVisibility>
+            {renderFeedEntry(info, {
+              environmentId: props.environmentId,
+              dispatchingMessageId: props.dispatchingMessageId,
+              onEditPendingMessage: props.onEditPendingMessage,
+              onUseArtifactTemplate: props.onUseArtifactTemplate,
+              threadId: props.threadId,
+              copiedRowId,
+              expandedWorkRows,
+              workRowSizing,
+              workGroupScrollPositions,
+              terminalAssistantMessageIds,
+              unsettledTurnId,
+              failedRunIds,
+              onCopyWorkRow,
+              onToggleWorkGroup,
+              onToggleWorkRow,
+              onToggleTurnFold,
+              onPressPreview,
+              onPressVideo,
+              markdownLinkHandlers,
+              renderMarkdownImage,
+              renderViewedImage,
+              renderReasoning,
+              iconSubtleColor,
+              screenColor,
+              userBubbleColor,
+              markdownStyles,
+              reviewCommentColors,
+              reviewCommentBubbleWidth,
+              themeAppearance,
+              usesNativeWorkspaceColumns,
+              userBubbleMaxWidth,
+              markdownContentWidth,
+              contentWidth,
+              threadTitle: props.threadTitle,
+              skills: props.skills,
+              workspaceRoot: props.workspaceRoot,
+              delegatedTasks: props.delegatedTasks,
+            })}
+            {props.worktreeSetup && info.index === setupAnchorIndex ? (
+              <WorktreeSetupCard key={props.threadId} {...props.worktreeSetup} />
+            ) : props.setupWorkingStartedAt && info.index === setupAnchorIndex ? (
+              <WorktreeWorkingHeader startedAt={props.setupWorkingStartedAt} />
+            ) : null}
+          </ThreadMediaVisibility>
+        </MessageImageGalleryScope>
       </Animated.View>
     ),
     [
@@ -3377,7 +3404,7 @@ function ThreadFeedLoadEarlierControl(props: ThreadFeedHistoryControls) {
           className="min-h-9 flex-row items-center justify-center gap-2 rounded-full border border-border/60 bg-surface/80 px-4 py-2 disabled:opacity-50"
         >
           {props.loading ? (
-            <ActivityIndicator size="small" color={accentColor} />
+            <AppActivityIndicator size="small" color={accentColor} />
           ) : (
             <SymbolView name="chevron.up" size={12} tintColor={accentColor} type="monochrome" />
           )}
@@ -3393,4 +3420,25 @@ function ThreadFeedLoadEarlierControl(props: ThreadFeedHistoryControls) {
       ) : null}
     </View>
   );
+}
+
+function MessageImageGalleryScope(props: {
+  entry: PendingThreadFeedEntry;
+  environmentId: EnvironmentId;
+  threadId: ThreadId;
+  workspaceRoot: string | null | undefined;
+  children: ReactNode;
+}) {
+  const { entry, environmentId, threadId, workspaceRoot } = props;
+  const images = useMemo(
+    () =>
+      entry.type === "message"
+        ? [
+            ...messageImageGallery(entry.message, { environmentId, threadId, workspaceRoot }),
+            ...composerImageGallery(entry.pendingMessage?.attachments ?? []),
+          ]
+        : [],
+    [entry, environmentId, threadId, workspaceRoot],
+  );
+  return <FilePreviewGallery value={images}>{props.children}</FilePreviewGallery>;
 }
