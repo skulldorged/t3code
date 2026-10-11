@@ -2814,6 +2814,10 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (platform === "mac") {
     const path = yield* Path.Path;
     const repoRoot = yield* RepoRoot;
+    const projectSigning = yield* Config.String("T3CODE_MACOS_SELF_SIGN_IDENTITY").pipe(
+      Config.option,
+      Effect.map(Option.exists((identity) => identity.length > 0)),
+    );
     buildConfig.mac = {
       target: target === "dmg" ? [target, "zip"] : [target],
       icon: "icon.icns",
@@ -2847,7 +2851,19 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
           role: "Viewer",
         },
       ],
-      ...(signed ? { sign: path.join(repoRoot, "scripts/sign-macos.ts") } : {}),
+      ...(projectSigning
+        ? {
+            // Invoke the custom signer without discovering an Apple identity.
+            // The hook replaces this placeholder with the pinned project certificate.
+            identity: "-",
+            sign: path.join(repoRoot, "scripts/sign-macos.ts"),
+            hardenedRuntime: false,
+            preAutoEntitlements: false,
+            notarize: false,
+          }
+        : signed
+          ? { sign: path.join(repoRoot, "scripts/sign-macos.ts") }
+          : {}),
       ...(macPasskeySigning
         ? {
             entitlements: macPasskeySigning.entitlementsPath,

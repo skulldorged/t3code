@@ -360,6 +360,41 @@ jobs:
         with:
           name: cli-linux-x64
           path: wsl-runtime
+      - name: Import project macOS signing identity
+        if: matrix.platform == 'mac' && matrix.desktop_target
+        shell: bash
+        env:
+          PROJECT_P12: ${{ secrets.T3_MACOS_SELF_SIGN_P12 }}
+          PROJECT_PASSWORD: ${{ secrets.T3_MACOS_SELF_SIGN_PASSWORD }}
+          PROJECT_SHA1: ${{ secrets.T3_MACOS_SELF_SIGN_SHA1 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          [[ -n "$PROJECT_P12" && -n "$PROJECT_PASSWORD" && "$PROJECT_SHA1" =~ ^[0-9A-F]{40}$ ]] || {
+            echo "Project signing secrets are missing or invalid." >&2
+            exit 1
+          }
+          signing_dir="$RUNNER_TEMP/t3-project-signing"
+          mkdir "$signing_dir"
+          printf '%s' "$PROJECT_P12" | base64 --decode > "$signing_dir/identity.p12"
+          /usr/bin/openssl pkcs12 -in "$signing_dir/identity.p12" \
+            -passin env:PROJECT_PASSWORD -clcerts -nokeys -out "$signing_dir/certificate.pem"
+          fingerprint="$(/usr/bin/openssl x509 -in "$signing_dir/certificate.pem" -noout -fingerprint -sha1 | cut -d= -f2 | tr -d ':')"
+          subject="$(/usr/bin/openssl x509 -in "$signing_dir/certificate.pem" -noout -subject -nameopt RFC2253)"
+          [[ "$fingerprint" == "$PROJECT_SHA1" && "$subject" == 'subject=O=T3 Code Personal,CN=T3 Code Personal' ]] || {
+            echo "Signing certificate does not match the project identity." >&2
+            exit 1
+          }
+          keychain="$signing_dir/identity.keychain-db"
+          security create-keychain -p "$PROJECT_PASSWORD" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$PROJECT_PASSWORD" "$keychain"
+          security import "$signing_dir/identity.p12" -k "$keychain" \
+            -P "$PROJECT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$PROJECT_PASSWORD" "$keychain" > /dev/null
+          echo "T3CODE_MACOS_SELF_SIGN_IDENTITY=$PROJECT_SHA1" >> "$GITHUB_ENV"
+          echo "T3CODE_MACOS_SELF_SIGN_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
       - name: Build desktop package
         if: matrix.desktop_target
         shell: bash
@@ -379,6 +414,41 @@ jobs:
             args+=(--wsl-runtime "$GITHUB_WORKSPACE"/wsl-runtime/t3-*-linux-x64.tar.gz)
           fi
           vp run dist:desktop:artifact "${args[@]}"
+      - name: Inspect project-signed macOS app
+        if: matrix.platform == 'mac' && matrix.desktop_target
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive=(release/T3-Code-*-${{ matrix.arch }}.zip)
+          [[ "${#archive[@]}" == 1 && -f "${archive[0]}" ]]
+          inspection="$RUNNER_TEMP/t3-project-signing/inspection"
+          mkdir "$inspection"
+          ditto -x -k "${archive[0]}" "$inspection"
+          app=("$inspection/"*.app)
+          [[ "${#app[@]}" == 1 && -d "${app[0]}" ]]
+          codesign --verify --deep --strict --verbose=2 "${app[0]}"
+          codesign -d -r- "${app[0]}"
+          codesign -d --extract-certificates "$RUNNER_TEMP/t3-project-signing/built-cert-" "${app[0]}"
+          fingerprint="$(/usr/bin/openssl x509 -inform DER \
+            -in "$RUNNER_TEMP/t3-project-signing/built-cert-0" \
+            -noout -fingerprint -sha1 | cut -d= -f2 | tr -d ':')"
+          [[ "$fingerprint" == "$T3CODE_MACOS_SELF_SIGN_IDENTITY" ]]
+      - name: Remove temporary project signing keychain
+        if: always() && matrix.platform == 'mac' && matrix.desktop_target
+        shell: bash
+        run: |
+          keychain="$RUNNER_TEMP/t3-project-signing/identity.keychain-db"
+          cleanup_status=0
+          if [[ -f "$keychain" ]]; then
+            security delete-keychain "$keychain" || cleanup_status=$?
+          fi
+          python3 - <<'PY'
+          import pathlib, shutil, os
+          directory = pathlib.Path(os.environ["RUNNER_TEMP"]) / "t3-project-signing"
+          if directory.exists():
+              shutil.rmtree(directory)
+          PY
+          exit "$cleanup_status"
       - name: Collect desktop artifacts
         if: matrix.desktop_target
         shell: bash
