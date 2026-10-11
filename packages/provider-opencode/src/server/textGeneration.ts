@@ -16,6 +16,7 @@ const OpenCodeTextGenerationOperation = Schema.Literals([
   "generatePrContent",
   "generateBranchName",
   "generateThreadTitle",
+  "generateReviewGuide",
   "generateSideReply",
 ]);
 
@@ -425,7 +426,10 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
   });
 
   return {
-    ...TextGenerationOperations.fromRunner("OpenCodeTextGeneration", runOpenCodeJson),
+    ...TextGenerationOperations.fromRunner(
+      "OpenCodeTextGeneration",
+      TextGenerationOperations.withoutInvestigation("OpenCode", runOpenCodeJson),
+    ),
     generateSideReply,
   };
 });
