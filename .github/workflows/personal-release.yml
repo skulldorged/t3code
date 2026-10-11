@@ -380,7 +380,7 @@ jobs:
           /usr/bin/openssl pkcs12 -in "$signing_dir/identity.p12" \
             -passin env:PROJECT_PASSWORD -clcerts -nokeys -out "$signing_dir/certificate.pem"
           fingerprint="$(/usr/bin/openssl x509 -in "$signing_dir/certificate.pem" -noout -fingerprint -sha1 | cut -d= -f2 | tr -d ':')"
-          subject="$(/usr/bin/openssl x509 -in "$signing_dir/certificate.pem" -noout -subject -nameopt RFC2253)"
+          subject="$(/usr/bin/openssl x509 -in "$signing_dir/certificate.pem" -noout -subject -nameopt RFC2253 | sed 's/^subject= */subject=/')"
           [[ "$fingerprint" == "$PROJECT_SHA1" && "$subject" == 'subject=O=T3 Code Personal,CN=T3 Code Personal' ]] || {
             echo "Signing certificate does not match the project identity." >&2
             exit 1
