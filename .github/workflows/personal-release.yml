@@ -370,6 +370,10 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
+          [[ "${RUNNER_ENVIRONMENT:-}" == 'github-hosted' ]] || {
+            echo "Project certificate trust is restricted to disposable GitHub-hosted runners." >&2
+            exit 1
+          }
           [[ -n "$PROJECT_P12" && -n "$PROJECT_PASSWORD" && "$PROJECT_SHA1" =~ ^[0-9A-F]{40}$ ]] || {
             echo "Project signing secrets are missing or invalid." >&2
             exit 1
@@ -389,6 +393,16 @@ jobs:
           security create-keychain -p "$PROJECT_PASSWORD" "$keychain"
           security set-keychain-settings -lut 21600 "$keychain"
           security unlock-keychain -p "$PROJECT_PASSWORD" "$keychain"
+          # codesign's identity/private-key lookup also consults the search list.
+          # Append only our keychain and retain the runner's existing entries.
+          export PROJECT_KEYCHAIN="$keychain"
+          python3 - <<'PY'
+          import os, shlex, subprocess
+          keychain = os.environ["PROJECT_KEYCHAIN"]
+          existing = shlex.split(subprocess.check_output(["security", "list-keychains", "-d", "user"], text=True))
+          if keychain not in existing:
+              subprocess.run(["security", "list-keychains", "-d", "user", "-s", keychain, *existing], check=True)
+          PY
           security import "$signing_dir/identity.p12" -k "$keychain" \
             -P "$PROJECT_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: \
@@ -397,7 +411,7 @@ jobs:
           # certificate for code signing on the disposable runner, not on recipients.
           sudo security add-trusted-cert -d -r trustRoot -p codeSign \
             -k "$keychain" "$signing_dir/certificate.pem"
-          identities="$(security find-identity -v -p codesigning "$keychain")"
+          identities="$(security find-identity -v -p codesigning)"
           [[ "$identities" == *"$PROJECT_SHA1"* ]] || {
             echo "The imported project certificate is not a valid signing identity." >&2
             exit 1
@@ -460,26 +474,28 @@ jobs:
         shell: bash
         run: |
           python3 - <<'PY'
-          import os, pathlib, shutil, subprocess, sys
+          import os, pathlib, shlex, shutil, subprocess, sys
           directory = pathlib.Path(os.environ["RUNNER_TEMP"]) / "t3-project-signing"
-          certificate = directory / "certificate.pem"
           keychain = directory / "identity.keychain-db"
-          commands = []
-          if certificate.exists():
-              commands.append(["sudo", "-n", "security", "remove-trusted-cert", "-d", str(certificate)])
-          if keychain.exists():
-              commands.append(["security", "delete-keychain", str(keychain)])
           failed = False
           try:
-              for command in commands:
+              if keychain.exists():
                   try:
-                      subprocess.run(command, check=True, timeout=30)
+                      current = shlex.split(subprocess.check_output(["security", "list-keychains", "-d", "user"], text=True, timeout=30))
+                      subprocess.run(["security", "list-keychains", "-d", "user", "-s", *[entry for entry in current if entry != str(keychain)]], check=True, timeout=30)
                   except (subprocess.SubprocessError, OSError) as error:
                       failed = True
-                      print(f"Signing resource cleanup failed: {error}", file=sys.stderr)
+                      print(f"Signing keychain unregister failed: {error}", file=sys.stderr)
+                  try:
+                      subprocess.run(["security", "delete-keychain", str(keychain)], check=True, timeout=30)
+                  except (subprocess.SubprocessError, OSError) as error:
+                      failed = True
+                      print(f"Signing keychain deletion failed: {error}", file=sys.stderr)
           finally:
               if directory.exists():
                   shutil.rmtree(directory)
+          # The import guard permits only fresh GitHub-hosted VMs. Their
+          # teardown also removes the temporary admin certificate trust.
           sys.exit(1 if failed else 0)
           PY
       - name: Collect desktop artifacts
