@@ -422,7 +422,19 @@ jobs:
           if [[ "${{ matrix.platform }}" == "win" ]]; then
             args+=(--wsl-runtime "$GITHUB_WORKSPACE"/wsl-runtime/t3-*-linux-x64.tar.gz)
           fi
-          vp run dist:desktop:artifact "${args[@]}"
+          if [[ "${{ matrix.platform }}" == "mac" ]]; then
+            vp run dist:desktop:artifact "${args[@]}" 2>&1 | tee "$RUNNER_TEMP/macos-desktop-build.log"
+          else
+            vp run dist:desktop:artifact "${args[@]}"
+          fi
+      - name: Save macOS desktop build log
+        if: always() && matrix.platform == 'mac' && matrix.desktop_target
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-desktop-build-log
+          path: ${{ runner.temp }}/macos-desktop-build.log
+          if-no-files-found: ignore
+          retention-days: 3
       - name: Inspect project-signed macOS app
         if: matrix.platform == 'mac' && matrix.desktop_target
         shell: bash
@@ -444,24 +456,32 @@ jobs:
           [[ "$fingerprint" == "$T3CODE_MACOS_SELF_SIGN_IDENTITY" ]]
       - name: Remove temporary project signing keychain
         if: always() && matrix.platform == 'mac' && matrix.desktop_target
+        timeout-minutes: 2
         shell: bash
         run: |
-          keychain="$RUNNER_TEMP/t3-project-signing/identity.keychain-db"
-          cleanup_status=0
-          certificate="$RUNNER_TEMP/t3-project-signing/certificate.pem"
-          if [[ -f "$certificate" ]]; then
-            sudo security remove-trusted-cert -d "$certificate" || cleanup_status=$?
-          fi
-          if [[ -f "$keychain" ]]; then
-            security delete-keychain "$keychain" || cleanup_status=$?
-          fi
           python3 - <<'PY'
-          import pathlib, shutil, os
+          import os, pathlib, shutil, subprocess, sys
           directory = pathlib.Path(os.environ["RUNNER_TEMP"]) / "t3-project-signing"
-          if directory.exists():
-              shutil.rmtree(directory)
+          certificate = directory / "certificate.pem"
+          keychain = directory / "identity.keychain-db"
+          commands = []
+          if certificate.exists():
+              commands.append(["sudo", "-n", "security", "remove-trusted-cert", "-d", str(certificate)])
+          if keychain.exists():
+              commands.append(["security", "delete-keychain", str(keychain)])
+          failed = False
+          try:
+              for command in commands:
+                  try:
+                      subprocess.run(command, check=True, timeout=30)
+                  except (subprocess.SubprocessError, OSError) as error:
+                      failed = True
+                      print(f"Signing resource cleanup failed: {error}", file=sys.stderr)
+          finally:
+              if directory.exists():
+                  shutil.rmtree(directory)
+          sys.exit(1 if failed else 0)
           PY
-          exit "$cleanup_status"
       - name: Collect desktop artifacts
         if: matrix.desktop_target
         shell: bash
