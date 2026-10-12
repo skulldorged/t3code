@@ -59,6 +59,7 @@ import IconExternalLink from "@tabler/icons-react-native/IconExternalLink";
 import IconEyeOff from "@tabler/icons-react-native/IconEyeOff";
 import IconEye from "@tabler/icons-react-native/IconEye";
 import IconFileText from "@tabler/icons-react-native/IconFileText";
+import IconFileDiff from "@tabler/icons-react-native/IconFileDiff";
 import IconFilter from "@tabler/icons-react-native/IconFilter";
 import IconFilterFilled from "@tabler/icons-react-native/IconFilterFilled";
 import IconFolder from "@tabler/icons-react-native/IconFolder";
@@ -190,6 +191,7 @@ const ANDROID_ICON_BY_SF_SYMBOL = {
   doc: IconFileText,
   "doc.on.doc": IconCopy,
   "doc.text": IconFileText,
+  "file.diff": IconFileDiff,
   ellipsis: IconDots,
   moon: IconMoon,
   "ellipsis.circle": IconDotsCircleHorizontal,
@@ -273,10 +275,16 @@ const ANDROID_ICON_BY_SF_SYMBOL = {
   xmark: IconX,
   "xmark.circle.fill": IconCircleXFilled,
 } satisfies Partial<
-  Record<SFSymbol | "git.pull-request.closed" | "git.pull-request.draft" | "git.commit", Icon>
+  Record<
+    SFSymbol | "git.pull-request.closed" | "git.pull-request.draft" | "git.commit" | "file.diff",
+    Icon
+  >
 >;
 const SF_ICON_LOOKUP: Partial<
-  Record<SFSymbol | "git.pull-request.closed" | "git.pull-request.draft" | "git.commit", Icon>
+  Record<
+    SFSymbol | "git.pull-request.closed" | "git.pull-request.draft" | "git.commit" | "file.diff",
+    Icon
+  >
 > = ANDROID_ICON_BY_SF_SYMBOL;
 
 // Callers can pass `{ ios, android }` names where `android` is a Material
