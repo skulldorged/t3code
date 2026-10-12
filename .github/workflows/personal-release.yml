@@ -463,7 +463,7 @@ jobs:
           [[ "${#app[@]}" == 1 && -d "${app[0]}" ]]
           codesign --verify --deep --strict --verbose=2 "${app[0]}"
           codesign -d -r- "${app[0]}"
-          codesign -d --extract-certificates "$RUNNER_TEMP/t3-project-signing/built-cert-" "${app[0]}"
+          codesign -d --extract-certificates="$RUNNER_TEMP/t3-project-signing/built-cert-" "${app[0]}"
           fingerprint="$(/usr/bin/openssl x509 -inform DER \
             -in "$RUNNER_TEMP/t3-project-signing/built-cert-0" \
             -noout -fingerprint -sha1 | cut -d= -f2 | tr -d ':')"
