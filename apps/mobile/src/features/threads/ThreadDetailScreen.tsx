@@ -6,6 +6,7 @@ import type { WorktreeSetupCardProps } from "./worktree-setup-card";
 import type { ComposerTextPaste } from "../../native/T3ComposerEditor.types";
 import { type EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import type { HandoffEndpoints } from "@t3tools/client-runtime/handoff";
 import type {
   CodexFeedbackSubmission,
   EnvironmentThreadStatus,
@@ -171,6 +172,7 @@ export interface ThreadDetailScreenProps {
   readonly onDismissFeedback: (id: MessageId) => void;
   readonly selectedThreadFeed: ReadonlyArray<ThreadFeedEntry>;
   readonly delegatedTasks: ReadonlyArray<OrchestrationV2Subagent>;
+  readonly pendingHandoff?: HandoffEndpoints | null;
   readonly activityRun: ThreadFeedLatestRun | null;
   readonly activeWorkStartedAt: string | null;
   /** The live work is a provider-native subagent's runless root turn. */
@@ -1204,6 +1206,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
               workspaceRoot={props.threadCwd}
               feed={props.selectedThreadFeed}
               delegatedTasks={props.delegatedTasks}
+              pendingHandoff={props.pendingHandoff}
               worktreeSetup={props.worktreeSetup}
               setupWorkingStartedAt={props.setupWorkingStartedAt}
               queuedMessages={props.queuedMessages}
