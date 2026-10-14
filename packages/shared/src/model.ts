@@ -317,7 +317,8 @@ export function formatModelSlugName(slug: string): string {
   const prefix = slug.slice(0, separator);
   const name = slug.slice(separator);
   if (/^gpt-\d/i.test(name)) return prefix + formatCodexModelName(name);
-  if (!/^(claude-(opus|sonnet|haiku|fable)|gemini|grok|composer)-\d/i.test(name)) return slug;
+  if (!/^(claude-(opus|sonnet|haiku|fable|mythos)|gemini|grok|composer)-\d/i.test(name))
+    return slug;
   return (
     prefix +
     name

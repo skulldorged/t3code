@@ -168,12 +168,29 @@ function isVersionSupported(
   );
 }
 
+/** Account-gated models stay hidden until the capability probe completes. */
+export function resolveUngatedClaudeModels(
+  catalog: ClaudeModelCatalog,
+): ReadonlyArray<ClaudeCatalogModel["model"]> {
+  return catalog.models
+    .filter((entry) => !entry.compatibility.accountGated)
+    .map((entry) => entry.model);
+}
+
 export function resolveClaudeModelsForVersion(
   catalog: ClaudeModelCatalog,
   version: string | null | undefined,
+  accountModels: ReadonlyArray<string> = [],
 ): ReadonlyArray<ClaudeCatalogModel["model"]> {
+  const accountSlugs = new Set(
+    accountModels.map((id) => resolveClaudeModelSlug(catalog, id.replace(/\[.*$/, ""))),
+  );
   return catalog.models
-    .filter((entry) => isVersionSupported(entry.compatibility, version))
+    .filter(
+      (entry) =>
+        isVersionSupported(entry.compatibility, version) &&
+        (!entry.compatibility.accountGated || accountSlugs.has(entry.model.slug)),
+    )
     .map((entry) => entry.model);
 }
 

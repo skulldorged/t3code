@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-10-09T23:31:10Z",
+  "updatedAt": "2026-10-14T18:28:58Z",
   "compatibility": [
     {
       "driver": "codex",
@@ -105,7 +105,13 @@
       "gpt-daybreak-blue-latest",
       "gpt-daybreak-red-latest"
     ],
-    "claudeAgent": ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
+    "claudeAgent": [
+      "claude-mythos-5-1",
+      "claude-fable-5-1",
+      "claude-opus-5-5",
+      "claude-sonnet-5-5",
+      "claude-haiku-5-5"
+    ],
     "antigravity": ["gemini-3.8-flash-high", "gemini-3.8-flash-medium", "gemini-3.8-flash-low"]
   },
   "providers": {
@@ -142,6 +148,59 @@
         "chat": "claude-fable-5-1"
       },
       "profiles": {
+        "mythos-5-1": {
+          "capabilities": {
+            "optionDescriptors": [
+              {
+                "id": "effort",
+                "label": "Reasoning",
+                "type": "select",
+                "options": [
+                  {
+                    "id": "low",
+                    "label": "Low"
+                  },
+                  {
+                    "id": "medium",
+                    "label": "Medium"
+                  },
+                  {
+                    "id": "high",
+                    "label": "High",
+                    "isDefault": true
+                  },
+                  {
+                    "id": "xhigh",
+                    "label": "Extra High"
+                  },
+                  {
+                    "id": "max",
+                    "label": "Max"
+                  },
+                  {
+                    "id": "ultracode",
+                    "label": "Ultracode",
+                    "description": "xhigh effort plus multi-agent workflow orchestration"
+                  },
+                  {
+                    "id": "ultrathink",
+                    "label": "Ultrathink"
+                  }
+                ],
+                "promptInjectedValues": ["ultrathink"]
+              }
+            ]
+          },
+          "adapter": {
+            "claudeCode": {
+              "effortMap": {
+                "ultracode": "xhigh",
+                "ultrathink": null
+              },
+              "fixedContextWindowTokens": 1000000
+            }
+          }
+        },
         "fable-5": {
           "capabilities": {
             "optionDescriptors": [
@@ -678,6 +737,19 @@
           "status": "current",
           "profile": "sonnet-5",
           "adapter": { "claudeCode": { "minVersion": "2.1.284" } }
+        },
+        {
+          "slug": "claude-mythos-5-1",
+          "name": "Claude Mythos 5.1",
+          "aliases": ["mythos", "mythos-5.1", "claude-mythos-5.1"],
+          "status": "current",
+          "badge": "new",
+          "profile": "mythos-5-1",
+          "adapter": {
+            "claudeCode": {
+              "accountGated": true
+            }
+          }
         },
         {
           "slug": "claude-fable-5-1",
