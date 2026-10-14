@@ -338,7 +338,7 @@ const make = Effect.gen(function* () {
       const now = yield* nowIso;
       const evidenceItem =
         raised.evidence === null ? undefined : findEvidenceItem(records.turnItems, raised.evidence);
-      const id = WorthKnowingFindingId.make(`wk_${yield* crypto.randomUUIDv4}`);
+      const id = WorthKnowingFindingId.make(`wk_${yield* crypto.randomUUIDv4()}`);
       yield* store.insert({
         id,
         threadId: request.threadId,
