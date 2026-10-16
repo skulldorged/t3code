@@ -186,7 +186,6 @@ export interface CodexRuntimeInfo {
   readonly reasoningEffort: string;
 }
 
-/** Mode prompt for `turn/start.collaborationMode.settings.developer_instructions`. */
 export function buildCodexDeveloperInstructions(interactionMode: ProviderInteractionMode): string {
   return interactionMode === "plan"
     ? CODEX_PLAN_MODE_DEVELOPER_INSTRUCTIONS
@@ -194,21 +193,12 @@ export function buildCodexDeveloperInstructions(interactionMode: ProviderInterac
 }
 
 /**
- * T3 Code context for `turn/start.additionalContext`. Codex renders each entry
- * as a `<key>value</key>` developer message and resends it only when the value
- * changes.
- *
  * This must stay out of the collaboration mode: when the model catalog ships
  * its own text for a mode, as newer models do, Codex uses that text and drops
  * the client's `developer_instructions` entirely.
  */
 export function buildCodexAdditionalContext(
   runtime: CodexRuntimeInfo,
-  /**
-   * Whether the `t3-code` MCP server is attached to this turn. Callers derive
-   * it from the session's actual MCP configuration rather than re-reading the
-   * setting, so the prompt cannot claim tools the turn doesn't have.
-   */
   toolsAvailable: boolean | T3CodeToolAvailability = true,
 ): Record<string, V2TurnStartParams__AdditionalContextEntry> {
   const tools = toolInstructions(toolsAvailable);

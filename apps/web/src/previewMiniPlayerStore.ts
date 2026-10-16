@@ -27,7 +27,6 @@ export type PreviewMiniPlayerSource =
 export interface PreviewMiniPlayerState {
   readonly source: PreviewMiniPlayerSource;
   readonly position: PreviewMiniPlayerPosition | null;
-  /** Height always follows the mirrored source's aspect ratio. */
   readonly width: number | null;
   readonly lastInteraction: "drag" | "resize";
 }
@@ -158,7 +157,6 @@ export function selectThreadPreviewMiniPlayer(
   return byThreadKey[scopedThreadKey(ref)] ?? null;
 }
 
-/** The floating browser tab, or null when nothing floats or a device does. */
 export function selectThreadPreviewMiniPlayerTabId(
   byThreadKey: Record<string, PreviewMiniPlayerState>,
   ref: ScopedThreadRef | null | undefined,

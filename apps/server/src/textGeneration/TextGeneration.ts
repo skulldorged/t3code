@@ -26,9 +26,6 @@ export type {
 } from "@t3tools/provider-core/server/textGeneration";
 
 export { SIDE_REPLY_UNSUPPORTED } from "@t3tools/provider-core/server/textGeneration";
-/**
- * TextGeneration - Service tag for commit and change request text generation.
- */
 export class TextGeneration extends Context.Service<TextGeneration, ProviderTextGeneration>()(
   "t3/textGeneration/TextGeneration",
 ) {}
