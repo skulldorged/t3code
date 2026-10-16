@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { AppState, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { SymbolView } from "../../components/AppSymbol";
-import { AppText } from "../../components/AppText";
+import { SymbolView } from "../../components/ui/AppSymbol";
+import { AppText } from "../../components/ui/AppText";
 import { useAgentDesktopState } from "../../state/agentDesktop";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { AgentDesktopWebView } from "./AgentDesktopWebView";

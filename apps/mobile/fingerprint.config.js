@@ -9,10 +9,12 @@ const { loadRepoEnv } = require("../../scripts/lib/public-config.ts");
 // version keeps each major's OTAs on its own binaries: a new major reaches
 // users only once its store build is promoted.
 const appConfig = fs.readFileSync(path.join(__dirname, "app.config.ts"), "utf8");
-const defaultVersion = appConfig.match(
-  /^ {2}version: (?:repoEnv\.T3CODE_IOS_VERSION \?\? )?"([^"]+)"/m,
-)?.[1];
-const majorVersion = (loadRepoEnv().T3CODE_IOS_VERSION ?? defaultVersion)?.match(/^(\d+)\./)?.[1];
+const repoEnv = loadRepoEnv();
+const version =
+  repoEnv.T3CODE_IOS_VERSION ??
+  repoEnv.T3CODE_MOBILE_VERSION ??
+  appConfig.match(/^ {2}version: (?:repoEnv\.\w+ \?\? )*"([^"]+)"/m)?.[1];
+const majorVersion = version?.match(/^(\d+)\./)?.[1];
 if (!majorVersion) {
   throw new Error("fingerprint.config.js could not read the app version from app.config.ts");
 }

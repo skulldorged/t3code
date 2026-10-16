@@ -5,7 +5,7 @@ import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 import { useState } from "react";
 import { Linking, Pressable, View } from "react-native";
-import { AppText as Text } from "../../components/AppText";
+import { AppText as Text } from "../../components/ui/AppText";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useThreadDetail } from "../../state/use-thread-detail";

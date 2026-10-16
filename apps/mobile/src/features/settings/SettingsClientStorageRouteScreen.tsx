@@ -1,14 +1,15 @@
-import { AppActivityIndicator } from "../../components/AppActivityIndicator";
-import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
+import * as Dialog from "../../components/ui/Dialog";
+import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
+import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { type EnvironmentMachineKind, resolveEnvironmentMachineKind } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
 import { useMemo } from "react";
-import { Alert, Platform, Pressable, View } from "react-native";
+import { Platform, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AppText as Text } from "../../components/AppText";
-import { SymbolView } from "../../components/AppSymbol";
+import { AppText as Text } from "../../components/ui/AppText";
+import { SymbolView } from "../../components/ui/AppSymbol";
 import { EnvironmentMachineSymbol } from "../../components/EnvironmentMachineSymbol";
 import {
   clearBackgroundConnectionRetainedThread,
@@ -48,47 +49,36 @@ export function SettingsClientStorageRouteScreen() {
     const label =
       savedConnectionsById[environment.environmentId]?.environmentLabel ??
       environment.environmentId;
-    Alert.alert(
-      `Clear cache for ${label}?`,
-      "This removes offline threads, server metadata, and cached branches for this environment. The saved connection and credentials stay intact.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Clear Cache",
-          style: "destructive",
-          onPress: () => {
-            const retained = getBackgroundConnectionRetainedThreadSnapshot().thread;
-            if (
-              Platform.OS === "android" &&
-              retained?.environmentId === environment.environmentId
-            ) {
-              void clearBackgroundConnectionRetainedThread();
-            }
-            clearCache({ type: "environment", environmentId: environment.environmentId });
-          },
-        },
-      ],
-    );
+    Dialog.confirm({
+      title: `Clear cache for ${label}?`,
+      message:
+        "This removes offline threads, server metadata, and cached branches for this environment. The saved connection and credentials stay intact.",
+      confirmText: "Clear Cache",
+      destructive: true,
+      onConfirm: () => {
+        const retained = getBackgroundConnectionRetainedThreadSnapshot().thread;
+        if (Platform.OS === "android" && retained?.environmentId === environment.environmentId) {
+          void clearBackgroundConnectionRetainedThread();
+        }
+        clearCache({ type: "environment", environmentId: environment.environmentId });
+      },
+    });
   };
 
   const confirmClearAll = () => {
-    Alert.alert(
-      "Clear all client caches?",
-      "This removes offline data for every environment. Connections, credentials, account data, and app preferences stay intact.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Clear All Caches",
-          style: "destructive",
-          onPress: () => {
-            if (Platform.OS === "android") {
-              void clearBackgroundConnectionRetainedThread();
-            }
-            clearCache({ type: "all" });
-          },
-        },
-      ],
-    );
+    Dialog.confirm({
+      title: "Clear all client caches?",
+      message:
+        "This removes offline data for every environment. Connections, credentials, account data, and app preferences stay intact.",
+      confirmText: "Clear All Caches",
+      destructive: true,
+      onConfirm: () => {
+        if (Platform.OS === "android") {
+          void clearBackgroundConnectionRetainedThread();
+        }
+        clearCache({ type: "all" });
+      },
+    });
   };
 
   return (
