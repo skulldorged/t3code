@@ -55,7 +55,7 @@ import {
   PRIMARY_LOCAL_ENVIRONMENT_ID,
   resolveEnvironmentMachineKind,
 } from "@t3tools/contracts";
-import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
+import { useLocation, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
   ChartNoAxesColumnIcon,
@@ -161,7 +161,7 @@ import {
   newProjectId,
 } from "../lib/utils";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
-import { buildThreadRouteParams, resolveThreadRouteTarget } from "../threadRoutes";
+import { buildThreadRouteParams } from "../threadRoutes";
 import { useAvailableSettingsSearchItems } from "./settings/useAvailableSettingsSearchItems";
 import {
   applyWslEnvironmentConfiguration,
@@ -245,6 +245,7 @@ import {
 import type { Project } from "../types";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { readPullRequestListPreferences } from "~/components/pullRequest/pullRequestListPreferences";
+import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
 
 const EMPTY_BROWSE_ENTRIES: FilesystemBrowseResult["entries"] = [];
 
@@ -366,12 +367,15 @@ function notifyThemeSaveFailure(): void {
   );
 }
 
-// These run in their own hooks so the results stay cached across the palette's
-// later hook calls; the thread and project items key on them.
+// These helpers keep "use memo" until the palette's item building moves out of this
+// component: inlined, each result reaches the returned <CommandPaletteContent> through
+// the action and thread item arrays built after the browse hooks, and the compiler
+// leaves all of them uncached.
 function useThemeCards(
   customThemes: ReturnType<typeof useCustomThemes>,
   environmentThemes: ReturnType<typeof useEnvironmentThemeDefinitions>,
 ) {
+  // oxlint-disable-next-line t3code/no-manual-memo -- Kept until the palette's item building moves out of this component (see above).
   "use memo";
   const seen = new Set<string>();
   return [
@@ -386,30 +390,8 @@ function useThemeCards(
   ];
 }
 
-function useProviderEntryMap(
-  environments: ReturnType<typeof useEnvironments>["environments"],
-  primaryEnvironmentId: ReturnType<typeof usePrimaryEnvironmentId>,
-  providers: Parameters<typeof deriveProviderInstanceEntries>[0],
-) {
-  "use memo";
-  const map = new Map<string, ProviderInstanceEntry>();
-  for (const environment of environments) {
-    const serverConfig = environment.serverConfig;
-    const environmentProviders =
-      serverConfig?.providers ??
-      (environment.environmentId === primaryEnvironmentId ? providers : []);
-    const derived = deriveProviderInstanceEntries(environmentProviders);
-    const entries = serverConfig
-      ? applyProviderInstanceSettings(derived, serverConfig.settings, null)
-      : derived;
-    for (const entry of entries) {
-      map.set(`${environment.environmentId}:${entry.instanceId}`, entry);
-    }
-  }
-  return map;
-}
-
 function useThreadContentMatchByKey(matches: ReturnType<typeof useThreadSearch>["matches"]) {
+  // oxlint-disable-next-line t3code/no-manual-memo -- Kept until the palette's item building moves out of this component (see above).
   "use memo";
   return new Map(
     matches.flatMap((match) =>
@@ -421,6 +403,7 @@ function useThreadContentMatchByKey(matches: ReturnType<typeof useThreadSearch>[
 }
 
 function useEnvironmentLookups(environments: ReturnType<typeof useEnvironments>["environments"]) {
+  // oxlint-disable-next-line t3code/no-manual-memo -- Kept until the palette's item building moves out of this component (see above).
   "use memo";
   const environmentLabelById = new Map(
     environments.map((environment) => [environment.environmentId, environment.label] as const),
@@ -443,6 +426,7 @@ function useEnvironmentLookups(environments: ReturnType<typeof useEnvironments>[
 }
 
 function useProjectLookups(projects: ReturnType<typeof useProjects>) {
+  // oxlint-disable-next-line t3code/no-manual-memo -- Kept until the palette's item building moves out of this component (see above).
   "use memo";
   const projectCwdById = new Map<ProjectId, string>(
     projects.map((project) => [project.id, project.workspaceRoot]),
@@ -471,6 +455,7 @@ function useSortedProjectGroups({
   readonly environmentLabelById: ReadonlyMap<EnvironmentId, string>;
   readonly threads: ReturnType<typeof useThreadShells>;
 }) {
+  // oxlint-disable-next-line t3code/no-manual-memo -- Kept until the palette's item building moves out of this component (see above).
   "use memo";
   const projectGroupingSettings = selectProjectGroupingSettings(clientSettings);
   const orderedProjects = orderItemsByPreferredIds({
@@ -510,10 +495,7 @@ export function CommandPalette({ children }: { children: ReactNode }) {
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const { theme, themeHalves, resolvedTheme, appearanceMode, setAppearanceMode } = useTheme();
   const composerHandleRef = useRef<ChatComposerHandle | null>(null);
-  const routeTarget = useParams({
-    strict: false,
-    select: (params) => resolveThreadRouteTarget(params),
-  });
+  const routeTarget = useThreadRouteTarget();
   const routeThreadRef = routeTarget?.kind === "server" ? routeTarget.threadRef : null;
   const terminalOpen = useTerminalUiStateStore((state) =>
     routeThreadRef
@@ -761,10 +743,7 @@ function OpenCommandPaletteDialog(props: {
   const availableSettingsSearchItems = useAvailableSettingsSearchItems();
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
     useHandleNewThread();
-  const paletteRouteTarget = useParams({
-    strict: false,
-    select: (params) => resolveThreadRouteTarget(params),
-  });
+  const paletteRouteTarget = useThreadRouteTarget();
   const projects = useProjects();
   const referenceThreadRef =
     pathname === "/pull-requests"
@@ -828,10 +807,20 @@ function OpenCommandPaletteDialog(props: {
   const environmentThemes = useEnvironmentThemeDefinitions();
   const themeCards = useThemeCards(customThemes, environmentThemes);
   const providers = useAtomValue(primaryServerProvidersAtom);
-  const providerEntryByEnvironmentAndInstanceId = useProviderEntryMap(
-    environments,
-    primaryEnvironmentId,
-    providers,
+  const providerEntryByEnvironmentAndInstanceId = new Map<string, ProviderInstanceEntry>(
+    environments.flatMap((environment) => {
+      const serverConfig = environment.serverConfig;
+      const derived = deriveProviderInstanceEntries(
+        serverConfig?.providers ??
+          (environment.environmentId === primaryEnvironmentId ? providers : []),
+      );
+      const entries = serverConfig
+        ? applyProviderInstanceSettings(derived, serverConfig.settings, null)
+        : derived;
+      return entries.map(
+        (entry) => [`${environment.environmentId}:${entry.instanceId}`, entry] as const,
+      );
+    }),
   );
   const [viewStack, setViewStack] = useState<CommandPaletteView[]>([]);
   const currentView = viewStack.at(-1) ?? null;
