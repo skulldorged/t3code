@@ -30,7 +30,6 @@ import {
   type OrchestrationV2TurnItem,
   type RunAttemptId,
   type ScopedThreadRef,
-  type ServerProvider,
   type ServerProviderSkill,
   type RunId,
   ThreadId,
@@ -291,7 +290,7 @@ import { useV2ItemSupport } from "../../state/v2ItemSupport";
 import { Collapsible, CollapsibleTrigger, CollapsiblePanel } from "../ui/collapsible";
 import {
   isV2LifecycleItem,
-  SubagentAvatar,
+  EnvironmentSubagentAvatar,
   SubagentElapsed,
   SubagentNotificationLink,
   V2LifecycleRow,
@@ -320,7 +319,6 @@ interface TimelineRowSharedState {
   resolvedTheme: "light" | "dark";
   workspaceRoot: string | undefined;
   skills: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
-  providerStatuses: ReadonlyArray<ServerProvider>;
   runs: ReadonlyArray<HandoffTimelineRun>;
   delegatedTasks: ReadonlyArray<OrchestrationV2Subagent>;
   activeThreadEnvironmentId: EnvironmentId;
@@ -500,7 +498,6 @@ interface MessagesTimelineProps {
   timestampFormat: TimestampFormat;
   workspaceRoot: string | undefined;
   skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
-  providerStatuses: ReadonlyArray<ServerProvider>;
   runs: ReadonlyArray<HandoffTimelineRun>;
   delegatedTasks?: ReadonlyArray<OrchestrationV2Subagent>;
   anchorMessageId: MessageId | null;
@@ -597,7 +594,6 @@ const ConversationTimeline = memo(function ConversationTimeline({
   timestampFormat,
   workspaceRoot,
   skills = EMPTY_TIMELINE_SKILLS,
-  providerStatuses,
   runs: runsProp,
   delegatedTasks = EMPTY_TIMELINE_DELEGATED_TASKS,
   anchorMessageId,
@@ -1228,7 +1224,6 @@ const ConversationTimeline = memo(function ConversationTimeline({
     resolvedTheme,
     workspaceRoot,
     skills,
-    providerStatuses,
     runs,
     delegatedTasks,
     activeThreadEnvironmentId,
@@ -2510,7 +2505,7 @@ function UserMessageIntentMarker({
   );
 }
 
-export function resolvePreviewAnnotationImage(input: {
+function resolvePreviewAnnotationImage(input: {
   record: Extract<KnownComposerContextRecord, { kind: "preview-annotation" }>;
   recordsById: ReadonlyMap<string, ComposerContextRecord>;
   userImages: ReadonlyArray<ChatImageAttachment>;
@@ -3024,7 +3019,6 @@ function V2EventTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "event"
         resourceSummary={row.resourceSummary}
         createdAt={row.createdAt}
         timestampFormat={ctx.timestampFormat}
-        providerStatuses={ctx.providerStatuses}
         runs={ctx.runs}
         onOpenThread={ctx.onOpenThread}
       />
@@ -3273,12 +3267,11 @@ const V2SubagentGroup = memo(function V2SubagentGroup({
         >
           <span className="flex shrink-0 items-center -space-x-1.5" aria-hidden>
             {agents.slice(0, 3).map(({ item, status }) => (
-              <SubagentAvatar
+              <EnvironmentSubagentAvatar
                 key={item.id}
+                environmentId={ctx.activeThreadEnvironmentId}
+                providerInstanceId={item.providerInstanceId}
                 driver={item.driver}
-                provider={ctx.providerStatuses.find(
-                  (provider) => provider.instanceId === item.providerInstanceId,
-                )}
                 status={agents.length === 1 ? status : undefined}
               />
             ))}
@@ -3321,7 +3314,6 @@ const V2SubagentGroup = memo(function V2SubagentGroup({
                   item={item}
                   createdAt={row.createdAt}
                   timestampFormat={ctx.timestampFormat}
-                  providerStatuses={ctx.providerStatuses}
                   runs={ctx.runs}
                   onOpenThread={ctx.onOpenThread}
                 />
@@ -5283,7 +5275,6 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: WorkEntryRowP
       outcome={item.outcome}
       createdAt={props.workEntry.createdAt}
       timestampFormat={ctx.timestampFormat}
-      providerStatuses={ctx.providerStatuses}
       onOpenThread={ctx.onOpenThread}
       fallback={<WorkEntryLogRow {...props} />}
     />
