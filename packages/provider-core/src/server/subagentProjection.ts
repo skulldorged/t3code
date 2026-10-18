@@ -199,33 +199,22 @@ export function subagentResultForRun(
           candidate.text.trim().length > 0,
       )
       .toSorted((left, right) => right.ordinal - left.ordinal)[0] ?? null;
-  // Providers can refresh every message at settlement with the same updatedAt.
-  // The final assistant turn item's ordinal preserves conversation order.
+  const messages = projection.messages.filter(
+    (candidate) =>
+      candidate.runId === run.id &&
+      candidate.role === "assistant" &&
+      candidate.text.trim().length > 0,
+  );
+  // Turn item order is authoritative: providers can finalize every message of a turn at once,
+  // so message timestamps can tie. They only order messages that have no turn item.
   const message =
-    (turnItem === null
-      ? undefined
-      : projection.messages.find(
-          (candidate) =>
-            candidate.id === turnItem.messageId &&
-            candidate.runId === run.id &&
-            candidate.role === "assistant" &&
-            candidate.text.trim().length > 0,
-        )) ?? null;
-  const fallbackMessage =
-    turnItem !== null
-      ? null
-      : (projection.messages
-          .filter(
-            (candidate) =>
-              candidate.runId === run.id &&
-              candidate.role === "assistant" &&
-              candidate.text.trim().length > 0,
-          )
-          .toSorted(
-            (left, right) =>
-              DateTime.toEpochMillis(right.createdAt) - DateTime.toEpochMillis(left.createdAt) ||
-              DateTime.toEpochMillis(right.updatedAt) - DateTime.toEpochMillis(left.updatedAt),
-          )[0] ?? null);
+    messages.find((candidate) => candidate.id === turnItem?.messageId) ??
+    messages.toSorted(
+      (left, right) =>
+        DateTime.toEpochMillis(right.updatedAt) - DateTime.toEpochMillis(left.updatedAt) ||
+        DateTime.toEpochMillis(right.createdAt) - DateTime.toEpochMillis(left.createdAt),
+    )[0] ??
+    null;
   const failure =
     run.status === "failed"
       ? projection.turnItems
@@ -236,16 +225,12 @@ export function subagentResultForRun(
     (failure?.type === "error" ? failure.failure.message : undefined) ??
     message?.text ??
     turnItem?.text ??
-    fallbackMessage?.text ??
     (run.status === "completed"
       ? "Child task completed without an assistant result."
       : `Child task ended with status ${run.status}.`);
   return {
     text,
-    messageId:
-      failure === undefined
-        ? (message?.id ?? turnItem?.messageId ?? fallbackMessage?.id ?? null)
-        : null,
+    messageId: failure === undefined ? (message?.id ?? turnItem?.messageId ?? null) : null,
     turnItemId: failure?.id ?? turnItem?.id ?? null,
   };
 }
