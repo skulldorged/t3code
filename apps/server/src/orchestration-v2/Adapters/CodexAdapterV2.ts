@@ -18,6 +18,7 @@ import type { CodexEffectiveRuntime } from "../../provider/CodexManagedRuntime.t
 import {
   buildCodexInitializeParams,
   codexAppServerEnvironment,
+  codexDefaultReasoningEffortOverride,
 } from "../../provider/CodexProvider.ts";
 import {
   codexRateLimitsToUpdate,
@@ -750,10 +751,9 @@ export function buildCodexTurnStartParams(input: {
       requestedSandboxPolicy.type !== "dangerFullAccess"
         ? { type: "externalSandbox", networkAccess: "enabled" }
         : requestedSandboxPolicy;
-    const selectedEffort = getModelSelectionStringOptionValue(
-      input.modelSelection,
-      "reasoningEffort",
-    );
+    const selectedEffort =
+      getModelSelectionStringOptionValue(input.modelSelection, "reasoningEffort") ??
+      codexDefaultReasoningEffortOverride(input.modelSelection.model);
     const effort =
       selectedEffort === undefined ? undefined : yield* decodeTurnReasoningEffort(selectedEffort);
     const serviceTier =
@@ -776,7 +776,7 @@ export function buildCodexTurnStartParams(input: {
     const t3Context =
       input.hasT3Mcp === true
         ? buildCodexAdditionalContext(
-            { model: input.modelSelection.model, reasoningEffort: effort ?? "medium" },
+            { model: input.modelSelection.model, reasoningEffort: effort ?? undefined },
             {
               browser: input.browserToolsAvailable ?? true,
               device: input.deviceToolsAvailable ?? false,
@@ -794,7 +794,8 @@ export function buildCodexTurnStartParams(input: {
             mode: input.runtimePolicy.interactionMode === "plan" ? "plan" : "default",
             settings: {
               model: input.modelSelection.model,
-              reasoning_effort: effort ?? "medium",
+              // Codex falls back to the model's default effort when this is left out.
+              ...(effort === undefined ? {} : { reasoning_effort: effort }),
               ...(developerInstructions === undefined
                 ? {}
                 : { developer_instructions: developerInstructions }),
