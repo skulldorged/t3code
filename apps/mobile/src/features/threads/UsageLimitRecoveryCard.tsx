@@ -1,3 +1,4 @@
+import { Button } from "../../components/ui/Button";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { AsyncResult } from "effect/reactivity";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
@@ -5,7 +6,7 @@ import type { EnvironmentId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 import { useEffect, useState } from "react";
-import { Linking, Pressable, View } from "react-native";
+import { Linking, View } from "react-native";
 import { AppText as Text } from "../../components/ui/AppText";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -112,36 +113,26 @@ export function UsageLimitRecoveryCard({
             : "The provider did not report a reset time. Retry manually when your limit is available."}
       </Text>
       {chatGptUsageLimit ? (
-        <Pressable
-          accessibilityRole="link"
-          className="min-h-11 self-start justify-center rounded-lg bg-primary px-3"
+        <Button
+          label="Manage usage"
+          tone="primary"
           onPress={() => void Linking.openURL(CHATGPT_USAGE_URL).catch(() => undefined)}
-        >
-          <Text className="text-sm font-t3-medium text-primary-foreground">Manage usage</Text>
-        </Pressable>
+        />
       ) : null}
       {canSchedule ? (
         <View className="flex-row flex-wrap gap-2">
-          <Pressable
-            accessibilityRole="button"
+          <Button
+            label={scheduled ? "Cancel auto-resume" : "Resume at reset"}
+            tone="secondary"
             disabled={pending}
             onPress={() => void toggle("resume")}
-            className="self-start rounded-lg bg-subtle px-3 py-2 active:opacity-70"
-          >
-            <Text className="text-sm text-foreground">
-              {scheduled ? "Cancel auto-resume" : "Resume at reset"}
-            </Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
+          />
+          <Button
+            label={snoozed ? "Wake now" : "Snooze until reset"}
+            tone="secondary"
             disabled={pending || (!snoozed && resetPassed)}
             onPress={() => void toggle("snooze")}
-            className="self-start rounded-lg bg-subtle px-3 py-2 active:opacity-70"
-          >
-            <Text className="text-sm text-foreground">
-              {snoozed ? "Wake now" : "Snooze until reset"}
-            </Text>
-          </Pressable>
+          />
         </View>
       ) : null}
       {error ? (
