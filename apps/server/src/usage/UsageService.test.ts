@@ -32,10 +32,13 @@ import * as Layer from "effect/Layer";
 import * as Scheduler from "effect/Scheduler";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
+import * as SqlClient from "effect/sql/SqlClient";
 import { HttpClient, HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import * as Sqlite from "../persistence/Sqlite.ts";
+import * as CodexUsageHistory from "./CodexUsageHistory.ts";
 import * as CursorAccountReader from "@t3tools/provider-cursor/server/CursorAccountReader";
 import * as CursorKeychain from "@t3tools/provider-cursor/server/CursorKeychain";
 import * as CursorUsageAccounts from "@t3tools/provider-cursor/server/CursorUsageAccounts";
@@ -135,6 +138,7 @@ const layerService = (input: {
   ).pipe(
     Layer.provideMerge(AntigravityUsage.layer),
     Layer.provideMerge(ProviderHostLive.layer),
+    Layer.provideMerge(CodexUsageHistory.layer.pipe(Layer.provideMerge(Sqlite.layerMemory))),
     Layer.provideMerge(Layer.mock(BackgroundPolicy.BackgroundPolicy)({})),
     Layer.provideMerge(Layer.mock(ServerSecretStore.ServerSecretStore)({})),
     Layer.provideMerge(
@@ -266,7 +270,345 @@ function cursorSource(summary: { readonly sources: readonly UsageSource[] }) {
   return summary.sources.find((source) => source.fingerprint.provider === "cursor");
 }
 
+const seedCodexHistory = (input: {
+  id: string;
+  nativeTurnId?: string;
+  sessionId?: string;
+  model?: string;
+  options?: readonly { id: string; value: string | boolean }[];
+}) =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const { id } = input;
+    const selection = {
+      instanceId: "codex",
+      model: input.model ?? "gpt-6-astra",
+      options: input.options ?? [{ id: "serviceTier", value: "priority" }],
+    };
+    const run = {
+      id: `run-${id}`,
+      activeAttemptId: `attempt-${id}`,
+      status: "running",
+      modelSelection: selection,
+    };
+    yield* sql`INSERT INTO orchestration_v2_projection_run_attempts ${sql.insert({
+      attempt_id: run.activeAttemptId,
+      thread_id: `thread-${id}`,
+      run_id: run.id,
+      attempt_ordinal: 1,
+      root_node_id: `node-${id}`,
+      provider: "codex",
+      provider_thread_id: `provider-thread-${id}`,
+      provider_turn_id: `turn-${id}`,
+      status: "completed",
+      payload_json: encodeUnknownJsonString({ nativeThreadId: input.sessionId ?? "session" }),
+    })}`;
+    yield* sql`INSERT INTO orchestration_v2_projection_provider_turns ${sql.insert({
+      provider_turn_id: `turn-${id}`,
+      thread_id: `thread-${id}`,
+      provider_thread_id: `provider-thread-${id}`,
+      node_id: `node-${id}`,
+      run_attempt_id: run.activeAttemptId,
+      ordinal: 1,
+      status: "completed",
+      payload_json: encodeUnknownJsonString({
+        nativeTurnRef: { driver: "codex", nativeId: input.nativeTurnId ?? id, strength: "strong" },
+      }),
+    })}`;
+    const changedSelection = {
+      ...selection,
+      options: [{ id: "serviceTier", value: "ultrafast" }],
+    };
+    // These selections disagree so reading the current projection or the wrong event is visible.
+    yield* sql`INSERT INTO orchestration_v2_projection_runs ${sql.insert({
+      run_id: run.id,
+      thread_id: `thread-${id}`,
+      ordinal: 1,
+      provider: "codex",
+      provider_thread_id: `provider-thread-${id}`,
+      status: "completed",
+      requested_at: "2026-08-01T10:00:00Z",
+      payload_json: encodeUnknownJsonString({
+        ...run,
+        status: "completed",
+        modelSelection: { ...selection, options: [] },
+      }),
+    })}`;
+    for (const [index, payload] of [
+      { ...run, activeAttemptId: "earlier-attempt", modelSelection: changedSelection },
+      { ...run, status: "queued", modelSelection: changedSelection },
+      run,
+      { ...run, modelSelection: changedSelection },
+    ].entries()) {
+      yield* sql`INSERT INTO orchestration_events ${sql.insert({
+        event_id: `event-${id}-${index}`,
+        aggregate_kind: "thread",
+        stream_id: `thread-${id}`,
+        stream_version: index + 1,
+        event_type: "run.updated",
+        occurred_at: "2026-08-01T10:00:00Z",
+        actor_kind: "system",
+        metadata_json: "{}",
+        application_event_version: 2,
+        payload_json: encodeUnknownJsonString(payload),
+      })}`;
+    }
+  });
+
+describe("Codex usage history", () => {
+  const historyLayer = CodexUsageHistory.layer.pipe(Layer.provideMerge(Sqlite.layerMemory));
+  const request = (nativeTurnId: string) => ({
+    sessionId: "session",
+    nativeTurnId,
+    model: "gpt-6-astra",
+  });
+
+  it.effect("resolves a batch from each attempt's first running selection", () =>
+    Effect.gen(function* () {
+      yield* seedCodexHistory({ id: "fast" });
+      yield* seedCodexHistory({
+        id: "ultrafast",
+        options: [{ id: "serviceTier", value: "ultrafast" }],
+      });
+      yield* seedCodexHistory({ id: "legacy-option", options: [{ id: "fastMode", value: true }] });
+      yield* seedCodexHistory({ id: "standard", options: [] });
+      const requests = ["fast", "ultrafast", "legacy-option", "standard", "fast"].map(request);
+      const history = yield* CodexUsageHistory.CodexUsageHistory;
+      const resolved = yield* history.resolve(requests);
+      assert.strictEqual(resolved.size, requests.length);
+      assert.deepStrictEqual(
+        requests.map((item) => resolved.get(item)),
+        ["fast", "ultrafast", "fast", "standard", "fast"],
+      );
+    }).pipe(Effect.provide(historyLayer)),
+  );
+
+  it.effect("leaves ambiguous, mismatched, and missing V2 evidence unresolved", () =>
+    Effect.gen(function* () {
+      for (const id of [
+        "valid",
+        "duplicate-model",
+        "duplicate-session",
+        "imported",
+        "v1-event",
+        "queued",
+        "missing-selection",
+      ]) {
+        yield* seedCodexHistory({ id });
+      }
+      yield* seedCodexHistory({
+        id: "second-model",
+        nativeTurnId: "duplicate-model",
+        model: "other-model",
+      });
+      yield* seedCodexHistory({
+        id: "second-session",
+        nativeTurnId: "duplicate-session",
+        sessionId: "other-session",
+      });
+      yield* seedCodexHistory({ id: "wrong-model", model: "other-model" });
+      yield* seedCodexHistory({ id: "wrong-session", sessionId: "other-session" });
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`UPDATE orchestration_v2_projection_provider_turns
+        SET run_attempt_id = NULL WHERE provider_turn_id = 'turn-imported'`;
+      yield* sql`DELETE FROM orchestration_v2_projection_run_attempts WHERE attempt_id = 'attempt-imported'`;
+      yield* sql`UPDATE orchestration_events SET application_event_version = 1
+        WHERE stream_id = 'thread-v1-event'`;
+      yield* sql`UPDATE orchestration_events
+        SET payload_json = json_set(payload_json, '$.status', 'queued')
+        WHERE stream_id = 'thread-queued'`;
+      yield* sql`UPDATE orchestration_events
+        SET payload_json = json_remove(payload_json, '$.modelSelection')
+        WHERE event_id = 'event-missing-selection-2'`;
+      const requests = [
+        "valid",
+        "duplicate-model",
+        "duplicate-session",
+        "wrong-model",
+        "wrong-session",
+        "missing-turn",
+        "imported",
+        "v1-event",
+        "queued",
+        "missing-selection",
+      ].map(request);
+      const history = yield* CodexUsageHistory.CodexUsageHistory;
+      const resolved = yield* history.resolve(requests);
+      assert.deepStrictEqual([...resolved], [[requests[0], "fast"]]);
+    }).pipe(Effect.provide(historyLayer)),
+  );
+
+  it.effect(
+    "reports SQL failures through the typed channel and can resolve again after repair",
+    () =>
+      Effect.gen(function* () {
+        yield* seedCodexHistory({ id: "retry" });
+        const history = yield* CodexUsageHistory.CodexUsageHistory;
+        const sql = yield* SqlClient.SqlClient;
+        const input = request("retry");
+        yield* sql`ALTER TABLE orchestration_events RENAME TO unavailable_events`;
+        const error = yield* Effect.flip(history.resolve([input]));
+        assert.instanceOf(error, CodexUsageHistory.CodexUsageHistoryReadError);
+        assert.strictEqual(error.requestedTurnCount, 1);
+        yield* sql`ALTER TABLE unavailable_events RENAME TO orchestration_events`;
+        assert.strictEqual((yield* history.resolve([input])).get(input), "fast");
+      }).pipe(Effect.provide(historyLayer)),
+  );
+});
+
 describe("UsageService", () => {
+  it.live(
+    "repairs initial Codex prices after unchanged-file retries, persists evidence and corrections, and honors later native tiers",
+    () =>
+      Effect.gen(function* () {
+        const { home, settings } = yield* setup;
+        const sessions = NodePath.join(home, "codex", "sessions");
+        const fastPath = NodePath.join(sessions, "fast.jsonl");
+        const ultraPath = NodePath.join(sessions, "ultra.jsonl");
+        const meta = (id: string) => ({
+          type: "session_meta",
+          payload: { id, model_provider: "openai" },
+        });
+        const context = (turn_id?: string) => ({
+          type: "turn_context",
+          payload: { model: "gpt-6-astra", turn_id },
+        });
+        const usage = (output_tokens: number) => ({
+          type: "event_msg",
+          timestamp: "2026-08-01T10:00:00Z",
+          payload: {
+            type: "token_count",
+            info: { last_token_usage: { input_tokens: 0, output_tokens } },
+          },
+        });
+        const tier = (service_tier?: string) => ({
+          type: "event_msg",
+          payload: { type: "thread_settings_applied", thread_settings: { service_tier } },
+        });
+        const lines = (records: readonly unknown[]) =>
+          records.map((record) => encodeUnknownJsonString(record)).join("\n") + "\n";
+        const verify = (summary: UsageSummary, output: number, cost: number) => {
+          assert.strictEqual(totalOutputTokens(summary), output);
+          assert.strictEqual(
+            summary.buckets.reduce((sum, bucket) => sum + bucket.costUsd, 0),
+            cost,
+          );
+        };
+        yield* Effect.promise(async () => {
+          await NodeFSP.mkdir(sessions, { recursive: true });
+          await NodeFSP.writeFile(
+            fastPath,
+            lines([meta("fast-session"), context("fast-turn"), usage(1)]) +
+              encodeUnknownJsonString(usage(2)),
+          );
+          await NodeFSP.writeFile(
+            ultraPath,
+            lines([meta("ultra-session"), context("ultra-turn"), usage(4)]),
+          );
+        });
+        yield* Effect.gen(function* () {
+          const first = yield* UsageService.make;
+          verify(yield* first.readSummary(WINDOW), 7, 7);
+          yield* first.awaitPersisted;
+          const pending = yield* UsageService.make;
+          verify(yield* pending.readSummary(WINDOW), 7, 7);
+          yield* seedCodexHistory({ id: "fast-turn", sessionId: "fast-session" });
+          yield* seedCodexHistory({
+            id: "ultra-turn",
+            sessionId: "ultra-session",
+            options: [{ id: "serviceTier", value: "ultrafast" }],
+          });
+          const sql = yield* SqlClient.SqlClient;
+          yield* sql`ALTER TABLE orchestration_events RENAME TO unavailable_events`;
+          verify(yield* pending.readSummary(WINDOW), 7, 7);
+          yield* pending.awaitPersisted;
+          const retry = yield* UsageService.make;
+          verify(yield* retry.readSummary(WINDOW), 7, 7);
+          yield* sql`ALTER TABLE unavailable_events RENAME TO orchestration_events`;
+          // History repair must touch both the committed record and tentative tail.
+          verify(yield* retry.readSummary(WINDOW), 7, 30);
+          yield* retry.awaitPersisted;
+          yield* sql`ALTER TABLE orchestration_events RENAME TO resolved_events`;
+          verify(yield* retry.readSummary(WINDOW), 7, 30);
+          const resolved = yield* UsageService.make;
+          verify(yield* resolved.readSummary(WINDOW), 7, 30);
+          yield* sql`ALTER TABLE resolved_events RENAME TO orchestration_events`;
+
+          // Completing the tail reparses it; neither an absent turn ID nor a new
+          // turn with no retained attempt may inherit the inferred Fast speed.
+          yield* Effect.promise(() =>
+            NodeFSP.appendFile(
+              fastPath,
+              "\n" + lines([context(), usage(3), context("unretained-turn"), usage(4)]),
+            ),
+          );
+          verify(yield* resolved.readSummary(WINDOW), 14, 37);
+          yield* seedCodexHistory({
+            id: "native-turn",
+            sessionId: "fast-session",
+            options: [{ id: "serviceTier", value: "ultrafast" }],
+          });
+          yield* seedCodexHistory({ id: "later-native-turn", sessionId: "fast-session" });
+          yield* Effect.promise(() =>
+            NodeFSP.appendFile(
+              fastPath,
+              lines([
+                context("native-turn"),
+                tier(),
+                usage(5),
+                context("later-native-turn"),
+                usage(6),
+                tier("priority"),
+              ]) + encodeUnknownJsonString(usage(7)),
+            ),
+          );
+          verify(yield* resolved.readSummary(WINDOW), 32, 62);
+          yield* resolved.awaitPersisted;
+          const native = yield* UsageService.make;
+          verify(yield* native.readSummary(WINDOW), 32, 62);
+          yield* seedCodexHistory({
+            id: "after-restart-native",
+            sessionId: "fast-session",
+            options: [{ id: "serviceTier", value: "ultrafast" }],
+          });
+          yield* Effect.promise(() =>
+            NodeFSP.appendFile(
+              fastPath,
+              "\n" +
+                lines([context("after-restart-native"), usage(8), tier("ultrafast"), usage(9)]),
+            ),
+          );
+          verify(yield* native.readSummary(WINDOW), 49, 132);
+          yield* native.awaitPersisted;
+          yield* Effect.promise(async () => {
+            await NodeFSP.rm(fastPath);
+            await NodeFSP.rm(ultraPath);
+          });
+          yield* sql`DELETE FROM orchestration_events`;
+          const deleted = yield* UsageService.make;
+          verify(yield* deleted.readSummary(WINDOW), 49, 132);
+        }).pipe(
+          Effect.provide(
+            layerService({
+              prefix: "usage-initial-tier",
+              home,
+              settings,
+              ratesDocument: {
+                "gpt-6-astra": {
+                  input_cost_per_token: 0,
+                  output_cost_per_token: 1,
+                  input_cost_per_token_priority: 0,
+                  output_cost_per_token_priority: 2,
+                  input_cost_per_token_ultrafast: 0,
+                  output_cost_per_token_ultrafast: 6,
+                },
+              },
+            }),
+          ),
+        );
+      }).pipe(Effect.scoped),
+  );
+
   it.live(
     "reads Pi per-model usage and auxiliary costs once across forks and repeated entries",
     () =>
@@ -1710,7 +2052,7 @@ describe("UsageService", () => {
       }).pipe(Effect.scoped),
   );
 
-  it.live.each([4, 5])(
+  it.live.each([4, 5, 6])(
     "upgrades a v%s cache: reparses live Codex usage, keeps deleted rollouts and the old file",
     (version) =>
       Effect.gen(function* () {
@@ -1751,7 +2093,7 @@ describe("UsageService", () => {
           const cachePath = NodePath.join(stateDir, SCAN_CACHE_FILE_NAME);
           const legacyPath = NodePath.join(
             stateDir,
-            version === 4 ? "usage-scan-cache.json" : "usage-scan-cache-v5.json",
+            version === 4 ? "usage-scan-cache.json" : `usage-scan-cache-v${version}.json`,
           );
           const first = yield* UsageService.make;
           yield* first.readSummary(WINDOW);
@@ -1769,12 +2111,25 @@ describe("UsageService", () => {
                 version === 4 ? 0 : 1,
               ]);
               if (version === 4) delete file.cs.speed;
-              delete file.cs.lastCumulativeUsage;
-              delete file.cs.malformedRecords;
+              if (version < 6) {
+                delete file.cs.lastCumulativeUsage;
+                delete file.cs.malformedRecords;
+              }
             }
             const text = encodeUnknownJsonString({ ...document, version });
             await NodeFSP.rm(cachePath);
             await NodeFSP.writeFile(legacyPath, text);
+            if (version === 6) {
+              for (const [name, olderVersion] of [
+                ["usage-scan-cache-v5.json", 5],
+                ["usage-scan-cache.json", 4],
+              ] as const) {
+                await NodeFSP.writeFile(
+                  NodePath.join(stateDir, name),
+                  encodeUnknownJsonString({ ...document, version: olderVersion, files: {} }),
+                );
+              }
+            }
             await NodeFSP.rm(deleted);
             return text;
           });
@@ -1787,7 +2142,7 @@ describe("UsageService", () => {
             60 + 20 * (version === 4 ? 1 : 2),
           );
           yield* upgraded.awaitPersisted;
-          assert.strictEqual(SCAN_CACHE_FILE_NAME, "usage-scan-cache-v6.json");
+          assert.strictEqual(SCAN_CACHE_FILE_NAME, "usage-scan-cache-v7.json");
           assert.strictEqual(
             yield* Effect.promise(() => NodeFSP.readFile(legacyPath, "utf8")),
             legacy,

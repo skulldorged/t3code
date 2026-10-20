@@ -1,4 +1,5 @@
 const CLI_RELEASE_REPOSITORY = "pingdotgg/t3code";
+export const CLI_RELEASES_PAGE_URL = `https://github.com/${CLI_RELEASE_REPOSITORY}/releases`;
 const PERSONAL_CLI_RELEASE_REPOSITORY = "skulldorged/t3code";
 const isPersonalRelease = (version: string) =>
   /^\d+\.\d+\.\d+-(?:nightly|preview)\.\d{8}\.\d+\.personal\.\d+$/.test(version);
