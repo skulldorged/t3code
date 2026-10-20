@@ -188,6 +188,10 @@ export default defineConfig({
         rules: { "t3code/prefer-effect-fn": "off" },
       },
       {
+        files: ["apps/web/**/*.test.{ts,tsx}"],
+        rules: { "t3code/require-disposable-render": "error" },
+      },
+      {
         files: ["apps/**/src/**", "packages/**/src/**"],
         excludeFiles: DOM_TEST_ENVIRONMENT_ALLOWLIST,
         rules: { "t3code/no-dom-test-environment": "error" },
