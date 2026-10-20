@@ -1116,10 +1116,7 @@ describe("PiAdapterV2", () => {
           message: "Ordering barrier",
         });
         yield* takeEvent(
-          (event) =>
-            event.type === "turn_item.updated" &&
-            event.turnItem.type === "dynamic_tool" &&
-            event.turnItem.toolName === "notify",
+          (event) => event.type === "turn_item.updated" && event.turnItem.type === "system_notice",
         );
         assert.equal(runtime.providerSession.status, "running");
         fake.queueState({ isStreaming: true });
@@ -1342,6 +1339,48 @@ describe("PiAdapterV2", () => {
         sessionError.type === "provider_session.updated" &&
           sessionError.providerSession.lastError?.includes("invisible tool execution") === true,
       );
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("gives notify and extension-error items distinct ids in each thread", () =>
+    Effect.gen(function* () {
+      const itemIds = new Set<string>();
+      for (const threadId of [THREAD_ID, ThreadId.make("thread-pi-test-2")]) {
+        const fake = yield* makeFakePi;
+        const { runtime, takeEvent } = yield* openRuntime(fake, "default", threadId);
+        const providerThread = yield* runtime.ensureThread({
+          threadId,
+          modelSelection: modelSelection("default"),
+          runtimePolicy,
+        });
+        yield* startTurn(
+          runtime,
+          providerThread,
+          "default",
+          [],
+          "Hello pi",
+          undefined,
+          1,
+          threadId,
+        );
+        yield* fake.takeRequest("prompt");
+        yield* fake.emit({
+          type: "extension_ui_request",
+          id: "ui-notify",
+          method: "notify",
+          message: "note",
+        });
+        yield* fake.emit({ type: "extension_error", extensionPath: "/ext/a.ts", error: "boom" });
+        for (const prefix of ["notify:", "extension-error:"]) {
+          const item = yield* takeEvent(
+            (event) =>
+              event.type === "turn_item.updated" &&
+              event.turnItem.nativeItemRef?.nativeId?.startsWith(prefix) === true,
+          );
+          if (item.type === "turn_item.updated") itemIds.add(item.turnItem.id);
+        }
+      }
+      assert.equal(itemIds.size, 4);
     }).pipe(Effect.scoped, Effect.provide(layerTest)),
   );
 
@@ -2673,10 +2712,21 @@ describe("PiAdapterV2", () => {
         type: "extension_ui_request",
         id: "ui-cmd",
         method: "notify",
-        message: "done",
+        message: "Command finished\nwith details",
         notifyType: "info",
       });
       yield* fake.emit({ type: "response", command: "prompt", success: true });
+      const notice = yield* takeEvent(
+        (event) =>
+          (event.type === "turn_item.updated" && event.turnItem.type === "system_notice") ||
+          event.type === "turn.terminal",
+      );
+      assert.isTrue(
+        notice.type === "turn_item.updated" &&
+          notice.turnItem.type === "system_notice" &&
+          notice.turnItem.status === "completed" &&
+          notice.turnItem.message === "Command finished\nwith details",
+      );
       const terminal = yield* takeEvent((event) => event.type === "turn.terminal");
       assert.isTrue(terminal.type === "turn.terminal" && terminal.status === "completed");
     }).pipe(Effect.scoped, Effect.provide(layerTest)),

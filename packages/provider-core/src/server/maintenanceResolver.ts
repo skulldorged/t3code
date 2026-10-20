@@ -211,8 +211,15 @@ export function normalizeCommandPath(commandPath: string): string {
   return commandPath.replaceAll("\\", "/").toLowerCase();
 }
 
+/**
+ * Vite+ shims live in `<VP_HOME>/bin`: `~/.vite-plus` by default,
+ * `~/.local/share/vite-plus` with the XDG layout, and `%LOCALAPPDATA%\vite-plus`
+ * on Windows.
+ */
 function isVitePlusGlobalCommandPath(commandPath: string): boolean {
-  return normalizeCommandPath(commandPath).includes("/.vite-plus/bin/");
+  return /\/(?:\.vite-plus|\.local\/share\/vite-plus|appdata\/local\/vite-plus)\/bin\//.test(
+    normalizeCommandPath(commandPath),
+  );
 }
 
 function isBunGlobalCommandPath(commandPath: string): boolean {
@@ -456,7 +463,13 @@ export const resolvePackageManagedProviderMaintenance = Effect.fn(
         ...(nativeUpdate.env ? { env: nativeUpdate.env } : {}),
       })
     : manual;
-  if (nativeUpdate?.isCommandPath && commandPaths.some(nativeUpdate.isCommandPath)) {
+  // A native-looking launcher can still delegate to a mise-owned install.
+  if (
+    nativeUpdate?.isCommandPath &&
+    commandPaths.some(nativeUpdate.isCommandPath) &&
+    !commandPaths.some(isMiseCommandPath) &&
+    !(yield* isMiseWrapperScript(context))
+  ) {
     return native;
   }
   // A `node_modules` path not proven below belongs to another package or a
@@ -899,17 +912,19 @@ export const enrichProviderSnapshotWithVersionAdvisory = Effect.fn(
 ) {
   const capabilities =
     maintenanceCapabilities ?? makeManualProviderMaintenanceCapabilities(snapshot.driver);
+  const currentVersion =
+    snapshot.installedVersion !== undefined ? snapshot.installedVersion : snapshot.version;
   const shouldResolveLatestVersion =
     options?.enableProviderUpdateChecks !== false &&
     snapshot.enabled &&
     snapshot.installed &&
-    Boolean(snapshot.version);
+    Boolean(currentVersion);
   if (!shouldResolveLatestVersion) {
     return {
       ...snapshot,
       versionAdvisory: createProviderVersionAdvisory({
         driver: snapshot.driver,
-        currentVersion: snapshot.version,
+        currentVersion,
         checkedAt: snapshot.checkedAt,
         maintenanceCapabilities: capabilities,
       }),
@@ -921,7 +936,7 @@ export const enrichProviderSnapshotWithVersionAdvisory = Effect.fn(
     ...snapshot,
     versionAdvisory: createProviderVersionAdvisory({
       driver: snapshot.driver,
-      currentVersion: snapshot.version,
+      currentVersion,
       latestVersion,
       checkedAt: DateTime.formatIso(yield* DateTime.now),
       maintenanceCapabilities: capabilities,

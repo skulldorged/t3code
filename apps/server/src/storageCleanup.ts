@@ -247,8 +247,8 @@ const make = Effect.gen(function* () {
         );
       });
 
-  const measureWorktree = (worktreePath: string) =>
-    Effect.gen(function* () {
+  const measureWorktree = Effect.fn("storageCleanup.measureWorktree")(
+    function* (worktreePath: string) {
       const root = yield* fs.realPath(worktreePath);
       const pending = [root];
       let entries = 1;
@@ -289,10 +289,10 @@ const make = Effect.gen(function* () {
         }
       }
       return bytes;
-    }).pipe(
-      Effect.timeout("30 seconds"),
-      Effect.orElseSucceed(() => null),
-    );
+    },
+    Effect.timeout("30 seconds"),
+    Effect.orElseSucceed(() => null),
+  );
 
   // The snapshot takes seconds on large databases, so it runs on the reader
   // worker instead of the event loop.
@@ -414,6 +414,7 @@ const make = Effect.gen(function* () {
             ? "No thread uses this worktree"
             : "No thread uses this folder, and it isn't a git worktree",
           path: worktreePath,
+          projectPath: null,
           threadId: null,
           threadTitle: null,
           bytes,
@@ -616,6 +617,7 @@ const make = Effect.gen(function* () {
         outcome: "kept",
         reason: "",
         path: worktreePath,
+        projectPath: project?.workspaceRoot ?? null,
         threadId: thread.id,
         threadTitle: thread.title,
         bytes: null,
@@ -947,6 +949,7 @@ const make = Effect.gen(function* () {
             outcome: "failed",
             reason: cleanupFailureReason(error),
             path: null,
+            projectPath: null,
             threadId: null,
             threadTitle: null,
             bytes: null,
@@ -979,6 +982,7 @@ const make = Effect.gen(function* () {
             outcome: files > 0 ? "removed" : "kept",
             reason: files === 0 ? "No expired files" : `Removed ${files} ${category.label}`,
             path: null,
+            projectPath: null,
             threadId: null,
             threadTitle: null,
             bytes: files > 0 ? bytes : null,
@@ -992,6 +996,7 @@ const make = Effect.gen(function* () {
               outcome: "failed",
               reason: cleanupFailureReason(error),
               path: null,
+              projectPath: null,
               threadId: null,
               threadTitle: null,
               bytes: removed.files > 0 ? removed.bytes : null,

@@ -814,6 +814,7 @@ export function canonicalItemTypeFromAcpToolKind(kind: string | undefined): Tool
 function makeToolCallState(
   input: {
     readonly toolCallId: string;
+    readonly name?: string | null | undefined;
     readonly title?: string | null | undefined;
     readonly kind?: EffectAcpSchema.ToolKind | null | undefined;
     readonly status?: EffectAcpSchema.ToolCallStatus | null | undefined;
@@ -841,6 +842,7 @@ function makeToolCallState(
       ? title
       : undefined;
   const data: Record<string, unknown> = { toolCallId };
+  if (input.name != null) data.name = input.name;
   if (kind) {
     data.kind = kind;
   }
@@ -911,6 +913,7 @@ function parseTypedToolCallState(
   return makeToolCallState(
     {
       toolCallId: event.toolCallId,
+      name: event.name,
       title: event.title,
       kind: event.kind,
       status: event.status,
@@ -1287,27 +1290,24 @@ export interface SessionLoadGate {
   readonly candidateConfigOptions?: ReadonlyArray<EffectAcpSchema.SessionConfigOption>;
 }
 
-export const waitForSessionLoadReplayIdle = (input: {
+export const waitForSessionLoadReplayIdle = Effect.fn(
+  "AcpRuntimeModel.waitForSessionLoadReplayIdle",
+)(function* (input: {
   readonly gateRef: Ref.Ref<Option.Option<SessionLoadGate>>;
-}): Effect.Effect<EffectAcpSchema.LoadSessionResponse, never> =>
-  Effect.gen(function* () {
-    const pollInterval = Duration.millis(25);
-    while (true) {
-      const gate = yield* Ref.get(input.gateRef);
-      if (
-        Option.isSome(gate) &&
-        gate.value.active &&
-        gate.value.lastActivityAtMillis !== undefined
-      ) {
-        const idleGapMillis = Duration.toMillis(gate.value.idleGap);
-        const nowMillis = yield* Clock.currentTimeMillis;
-        if (nowMillis - gate.value.lastActivityAtMillis >= idleGapMillis) {
-          return syntheticLoadSessionResponseFromInitialize(gate.value.initializeResult);
-        }
+}): Effect.fn.Return<EffectAcpSchema.LoadSessionResponse, never> {
+  const pollInterval = Duration.millis(25);
+  while (true) {
+    const gate = yield* Ref.get(input.gateRef);
+    if (Option.isSome(gate) && gate.value.active && gate.value.lastActivityAtMillis !== undefined) {
+      const idleGapMillis = Duration.toMillis(gate.value.idleGap);
+      const nowMillis = yield* Clock.currentTimeMillis;
+      if (nowMillis - gate.value.lastActivityAtMillis >= idleGapMillis) {
+        return syntheticLoadSessionResponseFromInitialize(gate.value.initializeResult);
       }
-      yield* Effect.sleep(pollInterval);
     }
-  });
+    yield* Effect.sleep(pollInterval);
+  }
+});
 
 export function sessionModelStateFromInitialize(
   initializeResult: EffectAcpSchema.InitializeResponse,
