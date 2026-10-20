@@ -55,8 +55,9 @@ export function resolveEnvironmentOptionLabel(input: {
 export function shouldShowEnvironmentIndicator(input: {
   activeEnvironment: Pick<EnvironmentOption, "isPrimary"> | null;
   canPickEnvironment: boolean;
+  serverUpdateAvailable?: boolean;
 }): boolean {
-  if (input.canPickEnvironment) return true;
+  if (input.canPickEnvironment || input.serverUpdateAvailable) return true;
   return input.activeEnvironment !== null && !input.activeEnvironment.isPrimary;
 }
 
@@ -67,10 +68,13 @@ export function shouldShowComposerContextStrip(input: {
   isGitRepo: boolean;
   showEnvironmentIndicator: boolean;
   hostsRestingComposerControls: boolean;
+  serverUpdateAvailable?: boolean;
 }): boolean {
   return (
     input.hasActiveProject &&
-    (input.isDraftHeroState || input.persistInActiveThreads) &&
+    (input.isDraftHeroState ||
+      input.persistInActiveThreads ||
+      input.serverUpdateAvailable === true) &&
     (input.isGitRepo || input.showEnvironmentIndicator || input.hostsRestingComposerControls)
   );
 }
@@ -215,11 +219,10 @@ export function resolveBranchTriggerLabel(input: {
     return "Select ref";
   }
   if (effectiveEnvMode === "worktree" && !activeWorktreePath) {
-    const baseRef =
-      startFromOrigin && resolvedActiveBranchIsRemote === false
-        ? `origin/${resolvedActiveBranch}`
-        : resolvedActiveBranch;
-    return `From ${baseRef}`;
+    // Only the server can determine a local branch's configured remote.
+    return startFromOrigin && resolvedActiveBranchIsRemote === false
+      ? `From ${resolvedActiveBranch} (remote)`
+      : `From ${resolvedActiveBranch}`;
   }
   return resolvedActiveBranch;
 }
