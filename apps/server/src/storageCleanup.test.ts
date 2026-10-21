@@ -244,7 +244,7 @@ const cleanupFixture = (
     const fs = yield* FileSystem.FileSystem;
     const config = yield* ServerConfig.ServerConfig;
     const git = yield* GitVcsDriver.GitVcsDriver;
-    const repo = yield* fs.makeTempDirectoryScoped({ prefix: "cleanup-repo-" });
+    const repo = yield* fs.realPath(yield* fs.makeTempDirectoryScoped({ prefix: "cleanup-repo-" }));
     const command = (cwd: string, args: string[]) =>
       git.execute({ operation: "cleanup-test", cwd, args });
     yield* command(repo, ["init", "-b", "main"]);
@@ -276,7 +276,12 @@ const cleanupFixture = (
         ...git,
         execute: (input) =>
           Effect.gen(function* () {
-            if (editBeforeRemoval && input.args.includes("remove"))
+            // Before Git's own clean check: inside `git worktree remove`, or on
+            // Windows the same status check the removal makes before deleting.
+            if (
+              editBeforeRemoval &&
+              (input.args.includes("remove") || input.args.includes("--porcelain"))
+            )
               yield* fs.writeFileString(`${worktree}/tracked.txt`, "late edit\n");
             return yield* git.execute(input);
           }),
