@@ -38,7 +38,7 @@ diff --git a/ios/ClerkNativeBridge.swift b/ios/ClerkNativeBridge.swift
 index f369457..558eb91 100644
 --- a/ios/ClerkNativeBridge.swift
 +++ b/ios/ClerkNativeBridge.swift
-@@ -719,10 +719,24 @@ final class ClerkNativeBridge {
+@@ -671,10 +671,24 @@ final class ClerkNativeBridge {
  
    private static func makeClerkOptions(proxyUrl: String?) -> Clerk.Options {
      let middleware = Clerk.Options.MiddlewareConfig(request: [ClerkExpoHeaderMiddleware()])
