@@ -71,6 +71,7 @@ import { formatRelativeTimeLabel, parseTimestampDate } from "../../timestampForm
 import type { SidebarThreadSummary } from "../../types";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { cn } from "~/lib/utils";
+import { textDirection } from "~/textDirection";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import {
   animateSidebarLayoutChanges,
@@ -947,6 +948,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       <input
         autoFocus
         value={renamingTitle}
+        dir="auto"
         aria-label="Thread title"
         onChange={(event) => onRenameTitleChange(event.target.value)}
         onFocus={(event) => event.currentTarget.select()}
@@ -960,7 +962,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       <span
         aria-hidden
         className={cn(
-          "min-w-0 flex-1 text-sm transition-opacity motion-reduce:transition-none",
+          "min-w-0 flex-1 text-start text-sm transition-opacity motion-reduce:transition-none",
           shouldRecede ? "font-normal" : "font-medium",
           variant === "card"
             ? cn(
@@ -985,6 +987,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               ),
           isRegeneratingTitle && "opacity-55",
         )}
+        dir={textDirection(thread.title)}
       >
         {thread.title}
       </span>
