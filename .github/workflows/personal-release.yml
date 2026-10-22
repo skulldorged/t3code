@@ -280,8 +280,6 @@ jobs:
           path: apps
       - name: Build CLI single-executable
         if: matrix.cli_archive
-        env:
-          VP_NODE_VERSION: "26.8.2"
         run: node apps/server/scripts/cli.ts build-exe --verbose
       - name: Package CLI archive
         if: matrix.cli_archive
