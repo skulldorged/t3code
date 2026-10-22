@@ -6,14 +6,11 @@ import {
 import { GaugeIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "../ui/button";
-import { OpenAI } from "../Icons";
-import { ChatGptUsageButton } from "../settings/ChatGptUsageButton";
 import { toastManager } from "../ui/toast";
 import type { ComposerBannerStackItem } from "./ComposerBannerStack";
 
 type RecoveryProps = {
   runId: RunId;
-  chatGptUsageLimit?: boolean;
   resetAt: string | null;
   stoppedAt: string;
   snoozedUntil: string | null;
@@ -22,26 +19,18 @@ type RecoveryProps = {
 };
 
 export function usageLimitRecoveryBannerItem(props: RecoveryProps): ComposerBannerStackItem {
-  const { runId, resetAt, stoppedAt, chatGptUsageLimit = false } = props;
+  const { runId, resetAt, stoppedAt } = props;
   const canSchedule = resetAt !== null && Date.parse(resetAt) > Date.parse(stoppedAt);
   return {
     id: `usage-limit-recovery:${runId}`,
     variant: "warning",
     priority: "urgent",
-    icon: chatGptUsageLimit ? <OpenAI className="size-4" aria-hidden="true" /> : <GaugeIcon />,
-    title: chatGptUsageLimit ? "ChatGPT usage limit reached" : "Usage limit reached",
+    icon: <GaugeIcon />,
+    title: "Usage limit reached",
     description: resetAt
       ? `Resets ${new Date(resetAt).toLocaleString()}`
-      : chatGptUsageLimit
-        ? "Review your usage settings in ChatGPT to continue."
-        : "Reset time unavailable; retry manually",
-    actions:
-      canSchedule || chatGptUsageLimit ? (
-        <div className="flex flex-wrap items-center gap-2">
-          {chatGptUsageLimit ? <ChatGptUsageButton variant="default" size="xs" /> : null}
-          {canSchedule ? <RecoveryActions key={`${runId}:${resetAt}`} {...props} /> : null}
-        </div>
-      ) : null,
+      : "Reset time unavailable; retry manually",
+    actions: canSchedule ? <RecoveryActions key={`${runId}:${resetAt}`} {...props} /> : null,
   };
 }
 

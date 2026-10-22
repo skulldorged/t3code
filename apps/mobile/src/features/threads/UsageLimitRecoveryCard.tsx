@@ -4,18 +4,11 @@ import { AsyncResult } from "effect/reactivity";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import type { EnvironmentId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
-import * as Option from "effect/Option";
 import { useEffect, useState } from "react";
-import { Linking, View } from "react-native";
+import { View } from "react-native";
 import { AppText as Text } from "../../components/ui/AppText";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { useThreadDetail } from "../../state/use-thread-detail";
-import { CHATGPT_USAGE_URL, isChatGptUsageLimitFailure } from "@t3tools/shared/usageLimits";
-import {
-  latestExecutedRun,
-  latestRootProviderFailure,
-} from "@t3tools/shared/orchestrationV2ThreadError";
 
 export function UsageLimitRecoveryCard({
   thread,
@@ -25,14 +18,6 @@ export function UsageLimitRecoveryCard({
   environmentId: EnvironmentId;
 }) {
   const updateMetadata = useAtomCommand(threadEnvironment.updateMetadata);
-  const detail = useThreadDetail({ environmentId, threadId: thread.id });
-  const projection = Option.getOrNull(detail.data);
-  const chatGptUsageLimit = isChatGptUsageLimitFailure(
-    projection
-      ? latestRootProviderFailure(latestExecutedRun(projection.runs), projection.turnItems)
-      : null,
-    thread.runtime?.lastError,
-  );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const resetAt = thread.runtime?.usageLimitResetAt ?? null;
@@ -102,23 +87,11 @@ export function UsageLimitRecoveryCard({
   }
   return (
     <View className="mx-3 mb-2 gap-2 rounded-xl border border-warning-foreground/25 bg-screen p-3">
-      {chatGptUsageLimit ? (
-        <Text className="text-sm font-t3-medium text-foreground">ChatGPT usage limit reached</Text>
-      ) : null}
       <Text className="text-sm text-warning-foreground">
         {resetAt
           ? `Usage limit resets ${DateTime.toDateUtc(DateTime.makeUnsafe(resetAt)).toLocaleString()}.`
-          : chatGptUsageLimit
-            ? "Review your usage settings in ChatGPT to continue."
-            : "The provider did not report a reset time. Retry manually when your limit is available."}
+          : "The provider did not report a reset time. Retry manually when your limit is available."}
       </Text>
-      {chatGptUsageLimit ? (
-        <Button
-          label="Manage usage"
-          tone="primary"
-          onPress={() => void Linking.openURL(CHATGPT_USAGE_URL).catch(() => undefined)}
-        />
-      ) : null}
       {canSchedule ? (
         <View className="flex-row flex-wrap gap-2">
           <Button
