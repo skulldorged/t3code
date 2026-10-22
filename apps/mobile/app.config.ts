@@ -236,7 +236,7 @@ const config: ExpoConfig = {
   platforms: ["ios", "android"],
   scheme: [variant.scheme, variant.iosBundleIdentifier],
   // Release builds stamp their version: iOS needs a numeric one, Android takes the release's own.
-  version: repoEnv.T3CODE_IOS_VERSION ?? repoEnv.T3CODE_MOBILE_VERSION ?? "2.0.0",
+  version: repoEnv.T3CODE_IOS_VERSION ?? repoEnv.T3CODE_MOBILE_VERSION ?? "2.1.0",
   runtimeVersion: {
     // Development manifests resolve on every launch, so avoid fingerprint's
     // expensive native-project calculation there. Preview and production stay
