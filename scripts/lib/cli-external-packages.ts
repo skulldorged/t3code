@@ -61,8 +61,9 @@ export function findInlinedExternalPackages(source: string): {
   readonly inlined: ReadonlyArray<string>;
   readonly inlinedPackages: ReadonlyArray<string>;
 } {
-  // Rolldown marks each inlined module with a `//#region <path>` or `// <path>` comment.
-  const regionPattern = /^\/\/ ?(?:#region )?(\S*\/\S*)[ \t]*$/gm;
+  // Rolldown marks each inlined module with a `//#region <path>` line; newer
+  // releases (vite-plus 1.4) emit a bare `// <path>` line instead.
+  const regionPattern = /^\/\/(?:#region)?[ \t]+(\S+)[ \t]*$/gm;
   const packagePattern = /node_modules\/((?:@[^/\s]+\/)?[^/\s]+)\//g;
 
   let regionCount = 0;
