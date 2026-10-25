@@ -141,6 +141,21 @@ describe("isAutoSettlementCandidate", () => {
     ).toBe(true);
   });
 
+  it("never settles, or keeps snoozed, a thread whose guest is waiting on the owner", () => {
+    expect(
+      ThreadSettlementService.isAutoSettlementCandidate(
+        shell({ pendingGuestMessageCount: 1 }),
+        NOW_MS,
+      ),
+    ).toBe(false);
+    const snoozed = shell({
+      snoozedUntil: at(60 * 60 * 1_000),
+      snoozedAt: at(-60 * 60 * 1_000),
+      pendingGuestMessageCount: 1,
+    });
+    expect(ThreadSettlementService.isSnoozed(snoozed, NOW_MS)).toBe(false);
+  });
+
   it("keeps snoozed threads parked until a fresh failure or timer wake", () => {
     const snoozed = shell({
       snoozedUntil: at(60 * 60 * 1_000),
@@ -402,8 +417,6 @@ describe("resolveAutoSettlementAt", () => {
       },
       stack: null,
     });
-    // The user asked the agent to merge pull requests; it merged one, then
-    // linked it to the thread as a record of the work.
     const recorded = link(1, at(-50 * 60 * 1_000), at(-55 * 60 * 1_000));
     const input = {
       thread: shell({
@@ -417,7 +430,6 @@ describe("resolveAutoSettlementAt", () => {
       autoSettleOnMerge: true,
     };
     expect(ThreadSettlementService.resolveAutoSettlementAt(input)).toBeNull();
-    // A pull request linked while open still settles the thread when it merges.
     expect(
       ThreadSettlementService.resolveAutoSettlementAt({
         ...input,

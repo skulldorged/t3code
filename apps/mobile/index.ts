@@ -8,8 +8,7 @@ import { featureFlags } from "react-native-screens";
 import App from "./src/App";
 import { registerBackgroundConnectionHeadlessTask } from "./src/features/background-connection/headless-task-registration";
 
-// Required for react-native-screens' iOS FormSheet sizing fix when a nested
-// native stack is rendered inside a non-fitToContents formSheet.
+// Enables iOS FormSheet sizing for nested native stacks in non-fitToContents sheets.
 featureFlags.experiment.synchronousScreenUpdatesEnabled = true;
 
 if (process.env.EXPO_PUBLIC_SHOWCASE === "1") {
