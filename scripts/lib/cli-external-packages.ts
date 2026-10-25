@@ -61,8 +61,8 @@ export function findInlinedExternalPackages(source: string): {
   readonly inlined: ReadonlyArray<string>;
   readonly inlinedPackages: ReadonlyArray<string>;
 } {
-  // Rolldown marks each inlined module with a `//#region <path>` comment.
-  const regionPattern = /\/\/#region\s+(\S+)/g;
+  // Rolldown marks each inlined module with a `//#region <path>` or `// <path>` comment.
+  const regionPattern = /^\/\/ ?(?:#region )?(\S*\/\S*)[ \t]*$/gm;
   const packagePattern = /node_modules\/((?:@[^/\s]+\/)?[^/\s]+)\//g;
 
   let regionCount = 0;

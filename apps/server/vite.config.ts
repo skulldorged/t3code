@@ -83,6 +83,8 @@ export default mergeConfig(
       outDir: packExecutable ? "dist-exe" : "dist",
       sourcemap: !packExecutable,
       clean: true,
+      // The bundle scan reads module comments, which minification strips.
+      minify: false,
       ...(packExecutable
         ? {
             exe: {
