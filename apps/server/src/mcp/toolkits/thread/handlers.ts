@@ -10,6 +10,7 @@ import {
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import { modelSelectionCommandType } from "@t3tools/shared/model";
+import { formatThreadLink } from "@t3tools/shared/threadLinks";
 
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import {
@@ -193,9 +194,15 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
     Effect.gen(function* () {
       const { caller } = yield* readCaller();
       const threadSearch = yield* ThreadSearch.ThreadSearch;
-      return yield* threadSearch
+      const { matches } = yield* threadSearch
         .searchThreads({ ...input, projectId: input.projectId ?? caller?.projectId })
         .pipe(Effect.mapError(unavailable));
+      return {
+        matches: matches.map((match) => ({
+          ...match,
+          link: formatThreadLink(match.threadId, match.title),
+        })),
+      };
     }),
   ),
   t3_thread_fork: writesThread((input) =>
