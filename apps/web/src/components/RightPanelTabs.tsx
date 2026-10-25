@@ -734,6 +734,7 @@ function PullRequestSurfaceIcon({
               : {}),
             repository: surface.repository,
             number: surface.number,
+            allowStale: false,
           },
         }),
   ).data;
