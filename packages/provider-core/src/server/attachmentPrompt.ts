@@ -1,29 +1,12 @@
 import {
   type ChatAttachment,
   type ChatImageAttachment,
-  type ProviderDriverKind,
   isProviderSendTurnSupportedImageMimeType,
   PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
   type SnapShotAccessibility,
   type SnapShotAccessibilityNode,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import * as Effect from "effect/Effect";
-
-import { ProviderAdapterProtocolError } from "./ProviderAdapter.ts";
-
-class AttachmentPromptError extends Schema.TaggedError<AttachmentPromptError>()(
-  "AttachmentPromptError",
-  { reason: Schema.Literals(["invalid_attachment", "context_too_large"]) },
-) {
-  override get message(): string {
-    return this.reason === "invalid_attachment"
-      ? "The attached file has an invalid reference. Remove it and attach it again."
-      : `Input plus attachment context exceeds the ${PROVIDER_SEND_TURN_MAX_INPUT_CHARS} character limit. Shorten the message or remove an attachment.`;
-  }
-}
-
-export { AttachmentPromptError };
 
 const encodePromptJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
@@ -179,29 +162,28 @@ export function providerMessageTextWithAttachmentPaths(input: {
   readonly resolveAttachmentPath: (attachment: ChatAttachment) => string | null;
 }): string {
   let text = input.text;
-  const appendContext = (context: string | undefined) => {
-    if (context === undefined) return false;
-    const candidate = text ? `${text}\n\n${context}` : context;
-    if (candidate.length > PROVIDER_SEND_TURN_MAX_INPUT_CHARS) return false;
-    text = candidate;
-    return true;
-  };
-
+  // The text-input budget must never hide the existence of an attachment.
   for (const attachment of input.attachments) {
     const path = input.resolveAttachmentPath(attachment);
-    if (path === null && attachment.type === "file") {
-      throw new AttachmentPromptError({ reason: "invalid_attachment" });
-    }
-    const appended = appendContext(
+    const context =
       path === null
-        ? undefined
-        : `[Attached ${attachment.type} "${attachment.name}" is saved at: ${path}]`,
-    );
-    // Generic files reach the provider through this path, so dropping it loses the attachment.
-    if (!appended && attachment.type === "file") {
-      throw new AttachmentPromptError({ reason: "context_too_large" });
-    }
+        ? `[Attached ${attachment.type} "${attachment.name}" is unavailable: could not resolve a saved path for attachment '${attachment.id}'.]`
+        : `[Attached ${attachment.type} "${attachment.name}" is saved at: ${path}]`;
+    text = text ? `${text}\n\n${context}` : context;
   }
+
+  const truncationNotice =
+    "[Optional captured-window context was truncated to fit the prompt budget. Attachments are listed above.]";
+  let truncated = false;
+  const appendContext = (context: string | undefined) => {
+    if (context === undefined) return;
+    const candidate = text ? `${text}\n\n${context}` : context;
+    if (candidate.length + 2 + truncationNotice.length <= PROVIDER_SEND_TURN_MAX_INPUT_CHARS) {
+      text = candidate;
+    } else {
+      truncated = true;
+    }
+  };
 
   for (const attachment of input.attachments) {
     const source =
@@ -239,20 +221,5 @@ export function providerMessageTextWithAttachmentPaths(input: {
     );
   }
 
-  return text;
+  return truncated ? `${text}\n\n${truncationNotice}` : text;
 }
-
-/** Route prompt preparation failures through the adapter's recoverable error channel. */
-export const prepareProviderMessageText = (
-  driver: ProviderDriverKind,
-  input: Parameters<typeof providerMessageTextWithAttachmentPaths>[0],
-) =>
-  Effect.try({
-    try: () => providerMessageTextWithAttachmentPaths(input),
-    catch: (cause) =>
-      new ProviderAdapterProtocolError({
-        driver,
-        detail: cause instanceof Error ? cause.message : "Could not prepare attachment context",
-        cause,
-      }),
-  });

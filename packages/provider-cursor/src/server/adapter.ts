@@ -61,7 +61,7 @@ import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
 import { turnScopedSelectionTransition } from "@t3tools/provider-core/server/selectionTransition";
 import {
   isProviderNativeImageAttachment,
-  prepareProviderMessageText,
+  providerMessageTextWithAttachmentPaths,
 } from "@t3tools/provider-core/server/attachmentPrompt";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import {
@@ -2206,7 +2206,7 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
             );
           }
           const userText = t3OrchestrationPromptForFirstRun({
-            prompt: yield* prepareProviderMessageText(CursorAgentSdk.CURSOR_PROVIDER, {
+            prompt: providerMessageTextWithAttachmentPaths({
               text:
                 cursorSkillNames === undefined
                   ? rawText

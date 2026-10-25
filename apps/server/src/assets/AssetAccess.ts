@@ -21,8 +21,10 @@ import {
 import {
   audioMimeTypeFromExtension,
   hostPreviewMimeTypeFromExtension,
+  isWorkspaceAudioPreviewPath,
   isWorkspaceImagePreviewPath,
   isWorkspacePreviewEntryPath,
+  isWorkspaceVideoPreviewPath,
   WORKSPACE_BROWSER_PREVIEW_EXTENSIONS,
   WORKSPACE_IMAGE_PREVIEW_EXTENSIONS,
 } from "@t3tools/shared/filePreview";
@@ -80,6 +82,7 @@ const PROJECT_FAVICON_ICNS_MIN_SIZE = 96;
 const INLINE_VIDEO_MIME_TYPE_PATTERN = /^video\/[\w!#$&^.+-]+$/i;
 // Use server-assigned attachment extensions, never client MIME types.
 const INLINE_PREVIEW_MIME_TYPES: Record<string, string> = {
+  svg: "image/svg+xml",
   pdf: "application/pdf",
   html: "text/html",
   htm: "text/html",
@@ -346,6 +349,7 @@ const readImageDimensionsFromHeader = (filePath: string) =>
 const finalizeAbsoluteMediaFileAsset = Effect.fn("AssetAccess.finalizeAbsoluteMediaFileAsset")(
   function* (input: {
     readonly requestedPath: string;
+    readonly expectedCanonicalPath?: string;
     readonly workspaceRoot: string | undefined;
     readonly resource: AssetResource;
     readonly expiresAt: number;
@@ -371,7 +375,12 @@ const finalizeAbsoluteMediaFileAsset = Effect.fn("AssetAccess.finalizeAbsoluteMe
         (cause) => new AssetWorkspaceAssetInspectionError({ resource: input.resource, cause }),
       ),
     );
-    if (!canonicalFile) {
+    // The workspace caller pins its containment-checked path; never follow a
+    // replacement symlink to a different file during this second resolution.
+    if (
+      !canonicalFile ||
+      (input.expectedCanonicalPath !== undefined && canonicalFile !== input.expectedCanonicalPath)
+    ) {
       return yield* new AssetWorkspaceAssetNotFoundError({
         resource: input.resource,
         checkedPath: input.requestedPath,
@@ -446,7 +455,11 @@ const finalizeWorkspaceFileAsset = Effect.fn("AssetAccess.finalizeWorkspaceFileA
             }),
         ),
       );
-    if (!isWorkspacePreviewEntryPath(resolved.relativePath)) {
+    const isDraftMedia =
+      input.resource._tag === "draft-workspace-file" &&
+      (isWorkspaceAudioPreviewPath(resolved.relativePath) ||
+        isWorkspaceVideoPreviewPath(resolved.relativePath));
+    if (!isDraftMedia && !isWorkspacePreviewEntryPath(resolved.relativePath)) {
       return yield* new AssetPreviewTypeValidationError({
         resource: input.resource,
       });
@@ -466,6 +479,13 @@ const finalizeWorkspaceFileAsset = Effect.fn("AssetAccess.finalizeWorkspaceFileA
     if (!canonicalFile) {
       return yield* new AssetWorkspaceAssetNotFoundError({
         resource: input.resource,
+      });
+    }
+    if (isDraftMedia) {
+      return yield* finalizeAbsoluteMediaFileAsset({
+        ...input,
+        requestedPath: canonicalFile,
+        expectedCanonicalPath: canonicalFile,
       });
     }
     const canonicalWorkspaceRoot = yield* fileSystem.realPath(input.workspaceRoot).pipe(
@@ -500,6 +520,7 @@ const finalizeWorkspaceFileAsset = Effect.fn("AssetAccess.finalizeWorkspaceFileA
           },
       fileName: path.basename(resolved.relativePath),
       imageDimensions,
+      fileRevision: undefined,
     };
   },
 );
@@ -612,6 +633,7 @@ export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (i
       claims = finalized.claims;
       fileName = finalized.fileName;
       imageDimensions = finalized.imageDimensions;
+      fileRevision = finalized.fileRevision;
       break;
     }
     case "attachment": {

@@ -70,7 +70,7 @@ import * as OpenCodeRuntime from "./OpenCodeRuntime.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
 import { turnScopedSelectionTransition } from "@t3tools/provider-core/server/selectionTransition";
-import { prepareProviderMessageText } from "@t3tools/provider-core/server/attachmentPrompt";
+import { providerMessageTextWithAttachmentPaths } from "@t3tools/provider-core/server/attachmentPrompt";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import {
   ProviderAdapterDriverCreateError,
@@ -2796,25 +2796,21 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
           return state;
         };
 
-        const resolvePromptParts = Effect.fnUntraced(function* (
-          turnInput: ProviderAdapter.ProviderAdapterV2TurnInput,
-        ) {
-          const text = (yield* prepareProviderMessageText(OPENCODE_PROVIDER, {
+        const resolvePromptParts = (turnInput: ProviderAdapter.ProviderAdapterV2TurnInput) => {
+          const text = providerMessageTextWithAttachmentPaths({
             text: turnInput.message.text,
             attachments: turnInput.message.attachments,
             resolveAttachmentPath: host.resolveAttachmentPath,
-          })).trim();
+          }).trim();
           const files = OpenCodeRuntime.toOpenCodeFileParts({
             attachments: turnInput.message.attachments,
             resolveAttachmentPath: host.resolveAttachmentPath,
           });
           if (text.length === 0 && files.length === 0) {
-            return yield* protocolError(
-              "OpenCode turns require text or at least one valid attachment",
-            );
+            throw protocolError("OpenCode turns require text or at least one valid attachment");
           }
           return [...(text.length === 0 ? [] : [{ type: "text" as const, text }]), ...files];
-        });
+        };
 
         const readSnapshot = Effect.fnUntraced(function* (
           providerThread: OrchestrationV2ProviderThread,
@@ -3102,7 +3098,7 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
               const isCompaction =
                 turnInput.message.text.trim() === "/compact" &&
                 turnInput.message.attachments.length === 0;
-              const parts = isCompaction ? [] : yield* resolvePromptParts(turnInput);
+              const parts = isCompaction ? [] : resolvePromptParts(turnInput);
               const startedAt = yield* DateTime.now;
               const syntheticNativeTurnId = `${sessionId}:attempt:${turnInput.attemptId}`;
               const providerTurnId = idAllocator.derive.providerTurn({
@@ -3304,11 +3300,11 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
                   `OpenCode model '${turn.modelSelection.model}' must use provider/model format`,
                 );
               }
-              const text = (yield* prepareProviderMessageText(OPENCODE_PROVIDER, {
+              const text = providerMessageTextWithAttachmentPaths({
                 text: steerInput.message.text,
                 attachments: steerInput.message.attachments,
                 resolveAttachmentPath: host.resolveAttachmentPath,
-              })).trim();
+              }).trim();
               const files = OpenCodeRuntime.toOpenCodeFileParts({
                 attachments: steerInput.message.attachments,
                 resolveAttachmentPath: host.resolveAttachmentPath,

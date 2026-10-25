@@ -85,9 +85,6 @@ function curatedCauseMessages(cause: unknown): {
       if (typeof cause !== "object") break;
       const tag = (cause as Record<string, unknown>)._tag;
       switch (tag) {
-        // The server's attachment prompt errors carry a user-facing message.
-        case "AttachmentPromptError":
-          return { known: stringField(cause, "message"), category: categoryMessage() };
         case "ContextHandoffBudgetError":
           return { known: new ContextHandoffBudgetError().message, category: categoryMessage() };
         case "AcpModelSelectionError":

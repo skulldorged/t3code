@@ -138,7 +138,7 @@ import {
 import { turnScopedSelectionTransition } from "@t3tools/provider-core/server/selectionTransition";
 import {
   isProviderNativeImageAttachment,
-  prepareProviderMessageText,
+  providerMessageTextWithAttachmentPaths,
 } from "@t3tools/provider-core/server/attachmentPrompt";
 import {
   makeSubagentChildThread,
@@ -3195,7 +3195,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           >,
         ) {
           const inputItems: Array<CodexSchema.V2TurnStartParams__UserInput> = [];
-          const text = yield* prepareProviderMessageText(CODEX_PROVIDER, {
+          const text = providerMessageTextWithAttachmentPaths({
             text: codexSkillMentionText(turnInput.message.text),
             attachments: turnInput.message.attachments,
             resolveAttachmentPath: (attachment) =>
