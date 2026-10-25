@@ -6,7 +6,12 @@ import { Platform, StatusBar } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { createStaticNavigation, getStateFromPath } from "@react-navigation/native";
+import {
+  createNavigationContainerRef,
+  createStaticNavigation,
+  getActionFromState,
+  getStateFromPath,
+} from "@react-navigation/native";
 
 import { RegistryContext } from "@effect/atom-react";
 import { ProjectChipIconRasterizer } from "./native/ProjectChipIconImages";
@@ -40,6 +45,7 @@ import {
   recordWorkspaceSelections,
   settingsLinkPage,
 } from "./features/workspace/workspace-selection-store";
+import { workspaceDetailLinkAction } from "./features/workspace/workspace-detail-selection";
 import { NativeLayoutMetricsProvider } from "./native/native-layout-metrics";
 
 import "../global.css";
@@ -56,6 +62,13 @@ const appLinking = {
   config: { initialRouteName: "Home" },
   filter: shouldHandleAppLink,
   getInitialURL: async () => (await Linking.getInitialURL()) ?? (await launchWorkspaceURL()),
+  getActionFromState: (
+    state: Parameters<typeof getActionFromState>[0],
+    options: Parameters<typeof getActionFromState>[1],
+  ): ReturnType<typeof getActionFromState> =>
+    // Our router handles the selection; React Navigation's type only lists its own actions.
+    (workspaceDetailLinkAction(state) as ReturnType<typeof getActionFromState>) ??
+    getActionFromState(state, options),
   getStateFromPath: (path: string, options: Parameters<typeof getStateFromPath>[1]) =>
     restoreSettingsLinkState(
       restoreDraftLinkState(getStateFromPath(path, options), path),
@@ -64,6 +77,7 @@ const appLinking = {
 };
 
 const Navigation = createStaticNavigation(RootStack);
+const navigationRef = createNavigationContainerRef();
 
 function SplashScreenCoordinator() {
   const { isReady } = useAppearancePreferences();
@@ -129,7 +143,9 @@ function AppContent() {
                 <NativeLayoutMetricsProvider>
                   <IncomingShareProvider>
                     <Navigation
+                      ref={navigationRef}
                       linking={appLinking}
+                      onReady={() => recordWorkspaceSelections(navigationRef.getRootState())}
                       theme={navigationTheme}
                       onStateChange={recordWorkspaceSelections}
                     />
