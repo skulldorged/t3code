@@ -51,6 +51,21 @@ describe("composer rich text markdown", () => {
     ]);
   });
 
+  it("keeps markers inside URLs literal", () => {
+    for (const text of [
+      "https://example.com/_handle_/status/1",
+      "www.example.com/**a**/b",
+      "<http://a.io/~~x~~>",
+      "<https://a.io/>https://b.io/**a****b**/",
+    ]) {
+      expect(parseInlineMarkdown(text)).toEqual([{ text, marks: [] }]);
+    }
+    expect(parseInlineMarkdown("*see https://a.io/_x_*.")).toEqual([
+      { text: "see https://a.io/_x_", marks: ["italic"] },
+      { text: ".", marks: [] },
+    ]);
+  });
+
   it("keeps code span contents literal", () => {
     expect(parseInlineMarkdown("`**not bold**`")).toEqual([
       { text: "**not bold**", marks: ["code"] },

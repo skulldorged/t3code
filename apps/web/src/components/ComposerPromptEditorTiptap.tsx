@@ -69,6 +69,7 @@ import {
   ComposerListExtensions,
   buildTiptapContent,
   caretTakesMarksBefore,
+  ComposerBoldExtension,
   ComposerBoldSelectionOnlyExtension,
   convertBulletItemToTask,
   ComposerCodeExtension,
@@ -695,6 +696,14 @@ function isInCodeBlock(view: EditorView): boolean {
   return view.state.selection.$from.parent.type.spec.code === true;
 }
 
+// The marks a paste here would take on, as `insertText` picks them.
+function pastesIntoInlineCode(view: EditorView): boolean {
+  const { storedMarks, selection } = view.state;
+  const { $from, $to, empty } = selection;
+  const marks = storedMarks ?? (empty ? $from.marks() : $from.marksAcross($to));
+  return marks?.some((mark) => mark.type.name === "code") ?? false;
+}
+
 const MarkerPluginKey = new PluginKey("composer-rich-markers");
 
 const ComposerMarkerPlugin = new Plugin({
@@ -843,8 +852,9 @@ function createComposerExtensions(richText: boolean) {
       code: false,
       listKeymap: false,
       undoRedo: { newGroupDelay: COMPOSER_UNDO_GROUP_DELAY },
+      bold: false,
       italic: false,
-      ...(richText ? {} : { bold: false, strike: false }),
+      ...(richText ? {} : { strike: false }),
     }),
     ComposerUndoGroupingExtension,
     ComposerTextDirectionExtension,
@@ -856,6 +866,7 @@ function createComposerExtensions(richText: boolean) {
     ...(richText
       ? [
           ComposerBoldSelectionOnlyExtension,
+          ComposerBoldExtension,
           ComposerItalicExtension,
           ComposerCodeExtension,
           ComposerCodeBlockExtension.extend({
@@ -1114,6 +1125,9 @@ function ComposerPromptEditorTiptapInner(
   const editor = useEditor(
     {
       extensions: richText ? RICH_TEXT_EXTENSIONS : PLAIN_TEXT_EXTENSIONS,
+      // handlePaste parses pasted Markdown itself. Tiptap's paste rules would run again over the
+      // result and restyle literal text, including inside inline code.
+      enablePasteRules: false,
       content: buildDocJson(value, (name) => composerSkillMeta(skills, name), {
         styling: richText,
         literalText,
@@ -1365,8 +1379,13 @@ function ComposerPromptEditorTiptapInner(
           const pastedText = clipboardData.getData("text/plain");
           if (!pastedText) return false;
           event.preventDefault();
-          // Paste verbatim inside fences; markdown parsing would split blocks and create unsupported chips.
-          if (isInCodeBlock(view)) {
+          // Paste verbatim inside fences and inline code; markdown parsing would split blocks, style
+          // literal text, and create unsupported chips. A backtick would end the inline code span the
+          // serializer writes, so that paste is parsed instead.
+          if (
+            isInCodeBlock(view) ||
+            (richText && !/[\n`]/.test(pastedText) && pastesIntoInlineCode(view))
+          ) {
             const { from, to } = view.state.selection;
             view.dispatch(
               markAsClipboardEdit(

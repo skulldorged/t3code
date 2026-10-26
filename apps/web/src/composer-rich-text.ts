@@ -1,8 +1,14 @@
+import { findComposerAutolinks } from "~/composer-autolinks";
+
 export type RichTextMark = "bold" | "italic" | "strike" | "code";
+
+/** Delimiters other than the default that wrote a span's marks, such as `_` for italic. */
+export type RichTextDelimiters = Partial<Record<RichTextMark, string>>;
 
 interface RichTextSpan {
   text: string;
   marks: RichTextMark[];
+  delimiters?: RichTextDelimiters;
 }
 
 export const RICH_TEXT_DELIMITERS: Record<RichTextMark, string> = {
@@ -12,17 +18,27 @@ export const RICH_TEXT_DELIMITERS: Record<RichTextMark, string> = {
   code: "`",
 };
 
-function pushSpan(spans: RichTextSpan[], text: string, marks: RichTextMark[]): void {
+function sameDelimiters(left: RichTextDelimiters = {}, right: RichTextDelimiters = {}): boolean {
+  return left.bold === right.bold && left.italic === right.italic;
+}
+
+function pushSpan(
+  spans: RichTextSpan[],
+  text: string,
+  marks: RichTextMark[],
+  delimiters?: RichTextDelimiters,
+): void {
   if (!text) return;
   const last = spans[spans.length - 1];
   if (
     last &&
     last.marks.length === marks.length &&
-    last.marks.every((mark, index) => mark === marks[index])
+    last.marks.every((mark, index) => mark === marks[index]) &&
+    sameDelimiters(last.delimiters, delimiters)
   ) {
     last.text += text;
   } else {
-    spans.push({ text, marks });
+    spans.push(delimiters ? { text, marks, delimiters } : { text, marks });
   }
 }
 
@@ -30,8 +46,20 @@ export function parseInlineMarkdown(text: string): RichTextSpan[] {
   const root: RichTextSpan[] = [];
   const stack: { delimiter: string; mark: RichTextMark; spans: RichTextSpan[] }[] = [];
   const current = () => stack.at(-1)?.spans ?? root;
+  const links = findComposerAutolinks(text);
+  let linkIndex = 0;
   let index = 0;
   while (index < text.length) {
+    // A URL is literal text inside whatever styles surround it. One that starts
+    // inside a code span or escape stays with that span.
+    while (linkIndex < links.length && links[linkIndex]!.from < index) linkIndex += 1;
+    const link = links[linkIndex];
+    if (link?.from === index) {
+      pushSpan(current(), text.slice(link.from, link.to), []);
+      index = link.to;
+      linkIndex += 1;
+      continue;
+    }
     const char = text[index]!;
     if (char === "\\") {
       pushSpan(current(), text.slice(index, index + 2), []);
@@ -82,7 +110,16 @@ export function parseInlineMarkdown(text: string): RichTextSpan[] {
         index + top.delimiter.length <= end
       ) {
         stack.pop();
-        for (const span of top.spans) pushSpan(current(), span.text, [top.mark, ...span.marks]);
+        // Keep `_` and `__` so the serializer writes back exactly what was parsed.
+        const outer: RichTextDelimiters | undefined =
+          top.delimiter === RICH_TEXT_DELIMITERS[top.mark]
+            ? undefined
+            : { [top.mark]: top.delimiter };
+        for (const span of top.spans) {
+          const delimiters =
+            outer || span.delimiters ? { ...span.delimiters, ...outer } : undefined;
+          pushSpan(current(), span.text, [top.mark, ...span.marks], delimiters);
+        }
         index += top.delimiter.length;
       } else if (canOpen && (char !== "~" || end - index >= 2)) {
         const length = char === "~" || end - index >= 2 ? 2 : 1;
@@ -108,7 +145,7 @@ export function parseInlineMarkdown(text: string): RichTextSpan[] {
   while (stack.length > 0) {
     const frame = stack.pop()!;
     pushSpan(current(), frame.delimiter, []);
-    for (const span of frame.spans) pushSpan(current(), span.text, span.marks);
+    for (const span of frame.spans) pushSpan(current(), span.text, span.marks, span.delimiters);
   }
   return root;
 }

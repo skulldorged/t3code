@@ -20,7 +20,9 @@ import {
   ComposerBlockExtensions,
   ComposerCodeBlockExtension,
   ComposerListExtensions,
+  ComposerBoldExtension,
   ComposerCodeExtension,
+  ComposerItalicExtension,
   ComposerTaskItemExtension,
   flatToMarkdown,
   flatToPm,
@@ -56,7 +58,11 @@ const schema = getSchemaByResolvedExtensions(
       gapcursor: false,
       trailingNode: false,
       code: false,
+      bold: false,
+      italic: false,
     }),
+    ComposerBoldExtension,
+    ComposerItalicExtension,
     ComposerCodeExtension,
     stubAtom("composer-mention", { path: { default: "" }, source: { default: "" } }),
     stubAtom("composer-skill", {
@@ -828,6 +834,42 @@ describe("pasting into a list item or quote", () => {
   });
 });
 
+describe("styling keeps the source characters", () => {
+  function markedText(doc: ProseMirrorNode, mark: string) {
+    const texts: string[] = [];
+    doc.descendants((node) => {
+      if (node.isText && node.marks.some((item) => item.type.name === mark)) {
+        texts.push(node.text!);
+      }
+    });
+    return texts;
+  }
+
+  it.each([
+    "https://example.com/_handle_/status/1",
+    "**see https://example.com/_a_/**",
+    "src/__test__.tsx and pkg/__init__.py",
+    "_a_*b*",
+  ])("round-trips %s", (value) => {
+    expect(roundTrip(value).value).toBe(value);
+  });
+
+  it("keeps URLs unstyled while styling around them", () => {
+    const build = (value: string) =>
+      ProseMirrorNode.fromJSON(
+        schema,
+        buildDocJson(value, (name) => ({ label: name, description: null })),
+      );
+    expect(markedText(build("https://example.com/_handle_/status/1"), "italic")).toEqual([]);
+    expect(markedText(build("**see https://example.com/_a_/**"), "bold")).toEqual([
+      "see https://example.com/_a_/",
+    ]);
+    expect(markedText(build("_https://example.com/a_"), "italic")).toEqual([
+      "https://example.com/a",
+    ]);
+  });
+});
+
 describe("pasting into a path query", () => {
   const skillLabelFor = (name: string) => ({ label: name, description: null });
 
@@ -871,14 +913,14 @@ describe("pasting into a path query", () => {
     expect(boldText(doc)).toEqual(["this", "that"]);
     expect(doc.lastChild!.type.name).toBe("taskList");
     expect(serializeEditorDoc(doc).value).toBe(
-      "Open @src/__test__.tsx and **this**\n- [ ] then **that**",
+      "Open @src/__test__.tsx and **this**\n- [ ] then __that__",
     );
   });
 
   it("parses markdown after Escape dismisses the path query", () => {
     const doc = paste("Open @", "__hello__ world", false);
     expect(boldText(doc)).toEqual(["hello"]);
-    expect(serializeEditorDoc(doc).value).toBe("Open @**hello** world");
+    expect(serializeEditorDoc(doc).value).toBe("Open @__hello__ world");
   });
 
   it("keeps the rest of the path's line on that line", () => {

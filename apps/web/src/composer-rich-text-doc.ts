@@ -11,6 +11,11 @@ import { Blockquote } from "@tiptap/extension-blockquote";
 import { CodeBlock } from "@tiptap/extension-code-block";
 import { Heading } from "@tiptap/extension-heading";
 import { HorizontalRule } from "@tiptap/extension-horizontal-rule";
+import {
+  Bold,
+  starInputRegex as boldStarInputRegex,
+  underscoreInputRegex as boldUnderscoreInputRegex,
+} from "@tiptap/extension-bold";
 import { Italic, starInputRegex, starPasteRegex } from "@tiptap/extension-italic";
 import {
   type Command,
@@ -34,7 +39,12 @@ import {
 
 import { splitPromptIntoComposerSegments } from "~/composer-editor-mentions";
 import { nextOrderedMarkerText } from "~/composer-list-continuation";
-import { parseInlineMarkdown, RICH_TEXT_DELIMITERS, type RichTextMark } from "~/composer-rich-text";
+import {
+  parseInlineMarkdown,
+  RICH_TEXT_DELIMITERS,
+  type RichTextDelimiters,
+  type RichTextMark,
+} from "~/composer-rich-text";
 import { collectInlineContextIds } from "~/lib/composerContextReferences";
 import { composerMathRanges } from "@t3tools/shared/composerInlineTokens";
 
@@ -140,17 +150,45 @@ export const ComposerCodeExtension = Code.extend({
   },
 });
 
+// Bold and italic remember an `_` or `__` that wrote them, so styling never
+// changes the characters the agent receives. Marks made in the composer keep
+// the default `*` and `**`.
+const delimiterAttribute = { delimiter: { default: null, rendered: false } };
+
 /**
- * The composer writes italic as `*text*`, so it keeps only the `*` shortcuts.
  * Tiptap's `_text_` rules fire on the `_` in names like `node_modules` and
- * italicize back to an earlier `_build`, even one inside a code span.
+ * italicize back to an earlier `_build`, even one inside a code span, so the
+ * composer keeps only the `*` shortcuts.
  */
 export const ComposerItalicExtension = Italic.extend({
+  addAttributes() {
+    return { ...this.parent?.(), ...delimiterAttribute };
+  },
   addInputRules() {
     return [markInputRule({ find: starInputRegex, type: this.type })];
   },
   addPasteRules() {
     return [markPasteRule({ find: starPasteRegex, type: this.type })];
+  },
+});
+
+/**
+ * A typed `__text__` keeps its underscores. Its rule needs a leading space, so
+ * it cannot fire inside `node__modules`.
+ */
+export const ComposerBoldExtension = Bold.extend({
+  addAttributes() {
+    return { ...this.parent?.(), ...delimiterAttribute };
+  },
+  addInputRules() {
+    return [
+      markInputRule({ find: boldStarInputRegex, type: this.type }),
+      markInputRule({
+        find: boldUnderscoreInputRegex,
+        type: this.type,
+        getAttributes: { delimiter: "__" },
+      }),
+    ];
   },
 });
 
@@ -538,12 +576,21 @@ function listJson(list: PendingList): InlineJson {
   return { type: "bulletList", content: items };
 }
 
-function textJsonForSpan(text: string, marks: RichTextMark[]): Record<string, unknown> {
+function textJsonForSpan(
+  text: string,
+  marks: RichTextMark[],
+  delimiters?: RichTextDelimiters,
+): Record<string, unknown> {
   const json: Record<string, unknown> = { type: "text", text };
   if (marks.length > 0) {
     json.marks = [...marks]
       .sort((a, b) => MARK_NESTING_ORDER.indexOf(a) - MARK_NESTING_ORDER.indexOf(b))
-      .map((mark) => ({ type: MARK_TO_TIPTAP[mark] }));
+      .map((mark) => {
+        const delimiter = delimiters?.[mark];
+        return delimiter
+          ? { type: MARK_TO_TIPTAP[mark], attrs: { delimiter } }
+          : { type: MARK_TO_TIPTAP[mark] };
+      });
   }
   return json;
 }
@@ -607,9 +654,9 @@ export function buildTiptapContent(
       span.text.split(sentinel).forEach((piece, index) => {
         if (index > 0) {
           const atom = atoms[atomIndex++]!;
-          inline.push({ ...atom, marks: textJsonForSpan("", span.marks).marks });
+          inline.push({ ...atom, marks: textJsonForSpan("", span.marks, span.delimiters).marks });
         }
-        if (piece) inline.push(textJsonForSpan(piece, span.marks));
+        if (piece) inline.push(textJsonForSpan(piece, span.marks, span.delimiters));
       });
     }
     return inline;
@@ -882,6 +929,23 @@ function pushBlankLineRun(acc: RichAccumulator, pmPos: number): void {
   acc.md += 1;
 }
 
+/** The delimiters that write these marks, in nesting order. */
+function markDelimiters(marks: readonly Mark[]): string[] {
+  return marks
+    .map((mark) => {
+      const name = TIPTAP_TO_MARK[mark.type.name];
+      if (!name) return null;
+      const delimiter = (mark.attrs as { delimiter?: unknown }).delimiter;
+      return {
+        name,
+        delimiter: typeof delimiter === "string" ? delimiter : RICH_TEXT_DELIMITERS[name],
+      };
+    })
+    .filter((mark) => mark !== null)
+    .sort((a, b) => MARK_NESTING_ORDER.indexOf(a.name) - MARK_NESTING_ORDER.indexOf(b.name))
+    .map((mark) => mark.delimiter);
+}
+
 function appendInlineRuns(
   container: ProseMirrorNode,
   contentStart: number,
@@ -930,36 +994,27 @@ function appendInlineRuns(
       }
     }
   }
-  const markEnds = new Map<RichTextMark, number>();
-  const orderedMarks: RichTextMark[][] = [];
+  // Each mark is written as its own delimiter, so `_a_` and `*b*` side by side
+  // stay two spans instead of merging into one.
+  const markEnds = new Map<string, number>();
+  const orderedMarks: string[][] = [];
   for (let index = children.length - 1; index >= 0; index -= 1) {
     const child = children[index]!;
-    const marks =
-      child.type.name === "hardBreak"
-        ? []
-        : child.marks
-            .map((mark) => TIPTAP_TO_MARK[mark.type.name])
-            .filter((mark): mark is RichTextMark => Boolean(mark));
-    for (const mark of MARK_NESTING_ORDER) {
-      if (!marks.includes(mark)) markEnds.delete(mark);
-      else if (!markEnds.has(mark)) markEnds.set(mark, index);
-    }
-    orderedMarks[index] = marks.sort(
-      (a, b) =>
-        markEnds.get(b)! - markEnds.get(a)! ||
-        MARK_NESTING_ORDER.indexOf(a) - MARK_NESTING_ORDER.indexOf(b),
-    );
+    const marks = child.type.name === "hardBreak" ? [] : markDelimiters(child.marks);
+    for (const mark of markEnds.keys()) if (!marks.includes(mark)) markEnds.delete(mark);
+    for (const mark of marks) if (!markEnds.has(mark)) markEnds.set(mark, index);
+    orderedMarks[index] = marks.sort((a, b) => markEnds.get(b)! - markEnds.get(a)!);
   }
   for (let index = 1; index < orderedMarks.length; index += 1) {
     const marks = orderedMarks[index]!;
-    const retained: RichTextMark[] = [];
+    const retained: string[] = [];
     for (const mark of orderedMarks[index - 1]!) {
       if (!marks.includes(mark)) break;
       retained.push(mark);
     }
     orderedMarks[index] = [...retained, ...marks.filter((mark) => !retained.includes(mark))];
   }
-  const commonLength = (left: RichTextMark[], right: RichTextMark[]) => {
+  const commonLength = (left: string[], right: string[]) => {
     let index = 0;
     while (index < left.length && left[index] === right[index]) index += 1;
     return index;
@@ -973,14 +1028,10 @@ function appendInlineRuns(
       return;
     }
     const marks = orderedMarks[index]!;
-    const open = marks
-      .slice(commonLength(marks, orderedMarks[index - 1] ?? []))
-      .map((mark) => RICH_TEXT_DELIMITERS[mark])
-      .join("");
+    const open = marks.slice(commonLength(marks, orderedMarks[index - 1] ?? [])).join("");
     const close = marks
       .slice(commonLength(marks, orderedMarks[index + 1] ?? []))
       .toReversed()
-      .map((mark) => RICH_TEXT_DELIMITERS[mark])
       .join("");
     const source = child.isText ? child.text! : readAtomSource(child);
     const docLen = child.isText ? source.length : 1;

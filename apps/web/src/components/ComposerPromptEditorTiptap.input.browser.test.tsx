@@ -199,6 +199,60 @@ it("lets composition replace selected text without surrounding it", async () => 
   expect(serializeEditorDoc(editor.state.doc).value).toBe('"');
 });
 
+function pasteText(editor: Editor, text: string) {
+  const clipboardData = new DataTransfer();
+  clipboardData.setData("text/plain", text);
+  editor.view.dom.dispatchEvent(new ClipboardEvent("paste", { clipboardData, cancelable: true }));
+}
+
+it("pastes a URL with underscores unchanged", async () => {
+  const url = "https://example.com/_handle_/status/1";
+  await using screen = await mountEditor("see ");
+  const { editor } = screen;
+  await act(async () => {
+    editor.commands.focus("end");
+    pasteText(editor, url);
+  });
+  expect(serializeEditorDoc(editor.state.doc).value).toBe(`see ${url}`);
+  expect(textWithMark(editor, "italic")).toEqual([]);
+});
+
+it("pastes into inline code verbatim", async () => {
+  await using screen = await mountEditor("see `xy` now");
+  const { editor } = screen;
+  await act(async () => {
+    editor.commands.setTextSelection("see x".length + 1);
+    pasteText(editor, "a_b_ **c**");
+  });
+  expect(serializeEditorDoc(editor.state.doc).value).toBe("see `xa_b_ **c**y` now");
+  expect(textWithMark(editor, "code")).toEqual(["xa_b_ **c**y"]);
+});
+
+it("keeps pasted code spans literal", async () => {
+  await using screen = await mountEditor("");
+  const { editor } = screen;
+  await act(async () => {
+    editor.commands.focus("end");
+    pasteText(editor, "see `**x**` now");
+  });
+  expect(serializeEditorDoc(editor.state.doc).value).toBe("see `**x**` now");
+  expect(textWithMark(editor, "bold")).toEqual([]);
+});
+
+it("keeps the underscores of a typed __bold__", async () => {
+  await using screen = await mountEditor("open ");
+  const { editor } = screen;
+  await act(async () => {
+    editor.commands.focus("end");
+    for (const character of "__init__") {
+      const { from, to } = editor.state.selection;
+      typeText(editor, from, to, character);
+    }
+  });
+  expect(textWithMark(editor, "bold")).toEqual(["init"]);
+  expect(serializeEditorDoc(editor.state.doc).value).toBe("open __init__");
+});
+
 it("keeps unknown dollar names editable when restoring and pasting a draft", async () => {
   const value = "echo $HOME $PATH $anything $notaskill $20 $20k $babysit ";
   await using screen = await mountEditor(value, true, [babysit]);
