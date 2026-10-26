@@ -58,49 +58,48 @@ export const layer = Layer.effectDiscard(
           ),
         );
 
-    const deliver = (name: string) =>
-      Effect.gen(function* () {
-        const file = path.join(inbox, name);
-        const raw = yield* fs.readFileString(file).pipe(Effect.option);
-        if (raw._tag === "None") return;
-        const message = yield* decodeInboxMessage(raw.value).pipe(Effect.option);
-        if (message._tag === "None") return yield* setAside(file, name, "not a valid message");
-        const { id, threadId, text, summary, outcome } = message.value;
-        const thread = yield* threads.getThreadShell(threadId).pipe(Effect.option);
-        if (thread._tag === "None") return; // The store is busy; try again next sweep.
-        if (thread.value === null || thread.value.deletedAt !== null) {
-          return yield* setAside(file, name, "no such thread");
+    const deliver = Effect.fnUntraced(function* (name: string) {
+      const file = path.join(inbox, name);
+      const raw = yield* fs.readFileString(file).pipe(Effect.option);
+      if (raw._tag === "None") return;
+      const message = yield* decodeInboxMessage(raw.value).pipe(Effect.option);
+      if (message._tag === "None") return yield* setAside(file, name, "not a valid message");
+      const { id, threadId, text, summary, outcome } = message.value;
+      const thread = yield* threads.getThreadShell(threadId).pipe(Effect.option);
+      if (thread._tag === "None") return; // The store is busy; try again next sweep.
+      if (thread.value === null || thread.value.deletedAt !== null) {
+        return yield* setAside(file, name, "no such thread");
+      }
+      const sent = yield* threads
+        .sendToThread({
+          projectId: thread.value.projectId,
+          commandId: CommandId.make(`inbox:${id}`),
+          threadId,
+          messageId: MessageId.make(`inbox:${id}`),
+          text,
+          attachments: [],
+          mode: "queue",
+          createdBy: "agent",
+          creationSource: "server",
+          notification: {
+            source: { kind: "command" },
+            outcome: outcome ?? "updated",
+            summary: noticeSummary(summary, text),
+          },
+        })
+        .pipe(Effect.result);
+      if (sent._tag === "Failure") {
+        const tag = (sent.failure as { readonly _tag?: string })._tag;
+        if (
+          tag === "ThreadManagementThreadArchivedError" ||
+          tag === "ThreadManagementThreadNotFoundError"
+        ) {
+          return yield* setAside(file, name, tag);
         }
-        const sent = yield* threads
-          .sendToThread({
-            projectId: thread.value.projectId,
-            commandId: CommandId.make(`inbox:${id}`),
-            threadId,
-            messageId: MessageId.make(`inbox:${id}`),
-            text,
-            attachments: [],
-            mode: "queue",
-            createdBy: "agent",
-            creationSource: "server",
-            notification: {
-              source: { kind: "command" },
-              outcome: outcome ?? "updated",
-              summary: noticeSummary(summary, text),
-            },
-          })
-          .pipe(Effect.result);
-        if (sent._tag === "Failure") {
-          const tag = (sent.failure as { readonly _tag?: string })._tag;
-          if (
-            tag === "ThreadManagementThreadArchivedError" ||
-            tag === "ThreadManagementThreadNotFoundError"
-          ) {
-            return yield* setAside(file, name, tag);
-          }
-          return; // Transient; the next sweep retries with the same command id.
-        }
-        yield* fs.remove(file).pipe(Effect.ignore);
-      });
+        return; // Transient; the next sweep retries with the same command id.
+      }
+      yield* fs.remove(file).pipe(Effect.ignore);
+    });
 
     const sweep = Effect.gen(function* () {
       const names = yield* fs.readDirectory(inbox).pipe(Effect.orElseSucceed(() => []));

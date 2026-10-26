@@ -215,39 +215,37 @@ const make = Effect.gen(function* () {
     });
 
   /** Hands control back to the agent and tells the threads that waited. */
-  const giveBack = (entry: Entry) =>
-    Effect.gen(function* () {
-      // The grace timer may be what called this, so it is dropped, not interrupted.
-      entry.releaseFiber = null;
-      if (entry.owner === null) return;
-      const owner = entry.owner;
-      for (const viewer of entry.viewers) if (viewer.key === owner) viewer.releaseInput();
-      entry.owner = null;
-      const waiting = new Set(entry.waiting);
-      if (entry.summary.request !== undefined) waiting.add(entry.summary.request.threadId);
-      entry.waiting.clear();
-      const { request: _request, ...summary } = entry.summary;
-      entry.summary = summary;
-      broadcastControl(entry);
-      yield* publish;
-      if (waiting.size > 0) {
-        yield* PubSub.publish(handBackPubSub, {
-          desktopId: entry.summary.id,
-          title: entry.summary.title,
-          threadIds: [...waiting],
-        });
-      }
-    });
+  const giveBack = Effect.fnUntraced(function* (entry: Entry) {
+    // The grace timer may be what called this, so it is dropped, not interrupted.
+    entry.releaseFiber = null;
+    if (entry.owner === null) return;
+    const owner = entry.owner;
+    for (const viewer of entry.viewers) if (viewer.key === owner) viewer.releaseInput();
+    entry.owner = null;
+    const waiting = new Set(entry.waiting);
+    if (entry.summary.request !== undefined) waiting.add(entry.summary.request.threadId);
+    entry.waiting.clear();
+    const { request: _request, ...summary } = entry.summary;
+    entry.summary = summary;
+    broadcastControl(entry);
+    yield* publish;
+    if (waiting.size > 0) {
+      yield* PubSub.publish(handBackPubSub, {
+        desktopId: entry.summary.id,
+        title: entry.summary.title,
+        threadIds: [...waiting],
+      });
+    }
+  });
 
-  const remove = (id: string) =>
-    Effect.gen(function* () {
-      const entry = entries.get(id);
-      if (entry === undefined) return;
-      yield* cancelRelease(entry);
-      entries.delete(id);
-      for (const viewer of entry.viewers) Queue.offerUnsafe(viewer.output, { _tag: "gone" });
-      yield* publish;
-    });
+  const remove = Effect.fnUntraced(function* (id: string) {
+    const entry = entries.get(id);
+    if (entry === undefined) return;
+    yield* cancelRelease(entry);
+    entries.delete(id);
+    for (const viewer of entry.viewers) Queue.offerUnsafe(viewer.output, { _tag: "gone" });
+    yield* publish;
+  });
 
   // Desktops from before a restart come back if their VNC still answers.
   const stored = (() => {
@@ -286,8 +284,8 @@ const make = Effect.gen(function* () {
     }
   }).pipe(Effect.repeat(Schedule.spaced(LIVENESS_INTERVAL)), Effect.forkScoped);
 
-  const register: AgentDesktopService["Service"]["register"] = (threadId, input) =>
-    Effect.gen(function* () {
+  const register: AgentDesktopService["Service"]["register"] = Effect.fnUntraced(
+    function* (threadId, input) {
       if (!(yield* probeVnc(input.vncPort))) {
         return yield* new AgentDesktopNoVncError({
           message: `Nothing on 127.0.0.1:${input.vncPort} answers as a VNC server.`,
@@ -328,10 +326,11 @@ const make = Effect.gen(function* () {
       entries.set(input.desktopId, entry);
       yield* publish;
       return entry.summary;
-    });
+    },
+  );
 
-  const unregister: AgentDesktopService["Service"]["unregister"] = (threadId, desktopId) =>
-    Effect.gen(function* () {
+  const unregister: AgentDesktopService["Service"]["unregister"] = Effect.fnUntraced(
+    function* (threadId, desktopId) {
       const entry = entries.get(desktopId);
       if (entry === undefined) return;
       const threadIds = entry.summary.threadIds.filter((id) => id !== threadId);
@@ -341,7 +340,8 @@ const make = Effect.gen(function* () {
         return;
       }
       yield* remove(desktopId);
-    });
+    },
+  );
 
   const status: AgentDesktopService["Service"]["status"] = (threadId, desktopId) =>
     Effect.sync(() => {
@@ -351,8 +351,8 @@ const make = Effect.gen(function* () {
       return { registered: true, controlledBy: entry.summary.controlledBy };
     });
 
-  const request: AgentDesktopService["Service"]["request"] = (threadId, desktopId, reason) =>
-    Effect.gen(function* () {
+  const request: AgentDesktopService["Service"]["request"] = Effect.fnUntraced(
+    function* (threadId, desktopId, reason) {
       const entry = entries.get(desktopId);
       if (entry === undefined) {
         return yield* new AgentDesktopNotRegisteredError({
@@ -374,10 +374,11 @@ const make = Effect.gen(function* () {
         },
       };
       yield* publish;
-    });
+    },
+  );
 
-  const attachViewer: AgentDesktopService["Service"]["attachViewer"] = (input) =>
-    Effect.gen(function* () {
+  const attachViewer: AgentDesktopService["Service"]["attachViewer"] = Effect.fnUntraced(
+    function* (input) {
       const entry = entries.get(input.desktopId);
       if (entry === undefined) {
         return yield* new AgentDesktopNotRegisteredError({
@@ -450,7 +451,8 @@ const make = Effect.gen(function* () {
           entry.owner === input.viewerKey ? giveBack(entry) : Effect.void,
         ),
       } satisfies AgentDesktopViewer;
-    });
+    },
+  );
 
   return AgentDesktopService.of({
     state: Effect.sync(snapshot),

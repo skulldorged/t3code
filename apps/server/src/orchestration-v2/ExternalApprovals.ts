@@ -88,123 +88,121 @@ export const layer: Layer.Layer<
       (cause: unknown) =>
         new ExternalApprovalError({ reason, threadId, cause });
 
-    const raise: ExternalApprovalsShape["raise"] = (input) =>
-      Effect.gen(function* () {
-        const { threadId } = input;
-        const { run, providerThread, providerTurn } = yield* projections
-          .getRunningTurnContext(threadId)
-          .pipe(Effect.mapError(fail(threadId)));
-        const providerSessionId = providerThread?.providerSessionId;
-        if (
-          run === undefined ||
-          providerThread === undefined ||
-          providerTurn === undefined ||
-          providerSessionId == null
-        ) {
-          return yield* new ExternalApprovalError({ reason: "no-running-turn", threadId });
-        }
-        const driver = providerThread.driver;
-        const requestId = yield* ids.allocate
-          .runtimeRequest({
-            driver,
-            providerTurnId: providerTurn.id,
-            nativeRequestId: `external:${yield* randomUuidV4}`,
-          })
-          .pipe(Effect.mapError(fail(threadId)));
-        const nodeId = ids.derive.approvalNode({ requestId });
-        const turnItemId = ids.derive.approvalTurnItem({ requestId });
-        const ordinal = yield* positions
-          .allocate({ threadId, turnItemId, runId: run.id })
-          .pipe(Effect.mapError(fail(threadId)));
-        const now = yield* DateTime.now;
-
-        const node: OrchestrationV2ExecutionNode = {
-          id: nodeId,
-          threadId,
-          runId: run.id,
-          parentNodeId: providerTurn.nodeId,
-          rootNodeId: run.rootNodeId ?? providerTurn.nodeId,
-          kind: "approval_request",
-          status: "waiting",
-          countsForRun: false,
-          providerThreadId: providerThread.id,
+    const raise: ExternalApprovalsShape["raise"] = Effect.fnUntraced(function* (input) {
+      const { threadId } = input;
+      const { run, providerThread, providerTurn } = yield* projections
+        .getRunningTurnContext(threadId)
+        .pipe(Effect.mapError(fail(threadId)));
+      const providerSessionId = providerThread?.providerSessionId;
+      if (
+        run === undefined ||
+        providerThread === undefined ||
+        providerTurn === undefined ||
+        providerSessionId == null
+      ) {
+        return yield* new ExternalApprovalError({ reason: "no-running-turn", threadId });
+      }
+      const driver = providerThread.driver;
+      const requestId = yield* ids.allocate
+        .runtimeRequest({
+          driver,
           providerTurnId: providerTurn.id,
-          nativeItemRef: null,
-          runtimeRequestId: requestId,
-          checkpointScopeId: null,
-          startedAt: now,
-          completedAt: null,
-        };
-        const request: OrchestrationV2RuntimeRequest = {
-          id: requestId,
-          nodeId,
-          providerTurnId: providerTurn.id,
-          nativeRequestRef: null,
-          kind: "permission",
-          status: "pending",
-          responseCapability: { type: "external" },
-          createdAt: now,
-          resolvedAt: null,
-        };
-        const turnItem: OrchestrationV2TurnItem = {
-          id: turnItemId,
-          threadId,
-          runId: run.id,
-          nodeId,
-          providerThreadId: providerThread.id,
-          providerTurnId: providerTurn.id,
-          nativeItemRef: null,
-          parentItemId: null,
-          ordinal,
-          status: "waiting",
-          title: null,
-          startedAt: now,
-          completedAt: null,
-          updatedAt: now,
-          type: "approval_request",
-          requestId,
-          requestKind: "permission",
-          prompt: input.prompt,
-          ...(input.appName === undefined ? {} : { appName: input.appName }),
-          ...(input.options === undefined ? {} : { options: input.options }),
-        };
+          nativeRequestId: `external:${yield* randomUuidV4}`,
+        })
+        .pipe(Effect.mapError(fail(threadId)));
+      const nodeId = ids.derive.approvalNode({ requestId });
+      const turnItemId = ids.derive.approvalTurnItem({ requestId });
+      const ordinal = yield* positions
+        .allocate({ threadId, turnItemId, runId: run.id })
+        .pipe(Effect.mapError(fail(threadId)));
+      const now = yield* DateTime.now;
 
-        const common = {
-          providerSessionId,
-          providerInstanceId: providerThread.providerInstanceId,
-          threadId,
-          runId: run.id,
-          nodeId,
-        };
-        for (const event of [
-          { type: "node.updated" as const, driver, node },
-          { type: "turn_item.updated" as const, driver, turnItem },
-          { type: "runtime_request.updated" as const, driver, threadId, runtimeRequest: request },
-        ]) {
-          yield* ingestor
-            .ingestNormalized({ ...common, event })
-            .pipe(Effect.mapError(fail(threadId)));
-        }
-        return { requestId, status: request.status };
-      });
+      const node: OrchestrationV2ExecutionNode = {
+        id: nodeId,
+        threadId,
+        runId: run.id,
+        parentNodeId: providerTurn.nodeId,
+        rootNodeId: run.rootNodeId ?? providerTurn.nodeId,
+        kind: "approval_request",
+        status: "waiting",
+        countsForRun: false,
+        providerThreadId: providerThread.id,
+        providerTurnId: providerTurn.id,
+        nativeItemRef: null,
+        runtimeRequestId: requestId,
+        checkpointScopeId: null,
+        startedAt: now,
+        completedAt: null,
+      };
+      const request: OrchestrationV2RuntimeRequest = {
+        id: requestId,
+        nodeId,
+        providerTurnId: providerTurn.id,
+        nativeRequestRef: null,
+        kind: "permission",
+        status: "pending",
+        responseCapability: { type: "external" },
+        createdAt: now,
+        resolvedAt: null,
+      };
+      const turnItem: OrchestrationV2TurnItem = {
+        id: turnItemId,
+        threadId,
+        runId: run.id,
+        nodeId,
+        providerThreadId: providerThread.id,
+        providerTurnId: providerTurn.id,
+        nativeItemRef: null,
+        parentItemId: null,
+        ordinal,
+        status: "waiting",
+        title: null,
+        startedAt: now,
+        completedAt: null,
+        updatedAt: now,
+        type: "approval_request",
+        requestId,
+        requestKind: "permission",
+        prompt: input.prompt,
+        ...(input.appName === undefined ? {} : { appName: input.appName }),
+        ...(input.options === undefined ? {} : { options: input.options }),
+      };
 
-    const status: ExternalApprovalsShape["status"] = (input) =>
-      Effect.gen(function* () {
-        const request = yield* projections
-          .getRuntimeRequest(input.threadId, input.requestId)
-          .pipe(Effect.mapError(fail(input.threadId)));
-        if (request === undefined || request.responseCapability.type !== "external") {
-          return yield* new ExternalApprovalError({
-            reason: "not-found",
-            threadId: input.threadId,
-          });
-        }
-        return {
-          requestId: request.id,
-          status: request.status,
-          ...(request.decision === undefined ? {} : { decision: request.decision }),
-        };
-      });
+      const common = {
+        providerSessionId,
+        providerInstanceId: providerThread.providerInstanceId,
+        threadId,
+        runId: run.id,
+        nodeId,
+      };
+      for (const event of [
+        { type: "node.updated" as const, driver, node },
+        { type: "turn_item.updated" as const, driver, turnItem },
+        { type: "runtime_request.updated" as const, driver, threadId, runtimeRequest: request },
+      ]) {
+        yield* ingestor
+          .ingestNormalized({ ...common, event })
+          .pipe(Effect.mapError(fail(threadId)));
+      }
+      return { requestId, status: request.status };
+    });
+
+    const status: ExternalApprovalsShape["status"] = Effect.fnUntraced(function* (input) {
+      const request = yield* projections
+        .getRuntimeRequest(input.threadId, input.requestId)
+        .pipe(Effect.mapError(fail(input.threadId)));
+      if (request === undefined || request.responseCapability.type !== "external") {
+        return yield* new ExternalApprovalError({
+          reason: "not-found",
+          threadId: input.threadId,
+        });
+      }
+      return {
+        requestId: request.id,
+        status: request.status,
+        ...(request.decision === undefined ? {} : { decision: request.decision }),
+      };
+    });
 
     return ExternalApprovals.of({ raise, status });
   }),

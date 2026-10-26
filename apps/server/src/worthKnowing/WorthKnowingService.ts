@@ -312,9 +312,7 @@ const make = Effect.gen(function* () {
       .pipe(
         // A runtime that cannot fork (OpenCode 2) is skipped quietly, not logged per run.
         Effect.catchTag("TextGenerationError", (error) =>
-          error.detail === TextGeneration.SIDE_REPLY_UNSUPPORTED
-            ? Effect.void
-            : Effect.fail(error),
+          error.detail === TextGeneration.SIDE_REPLY_UNSUPPORTED ? Effect.void : Effect.fail(error),
         ),
       );
     if (reply === undefined) return;
@@ -408,18 +406,17 @@ const make = Effect.gen(function* () {
    * A user message sent past an open finding the user never opened counts
    * toward passing it over; each finding passed over adds to the backoff.
    */
-  const recordMessagePast = (threadId: ThreadId, sentAt: string) =>
-    Effect.gen(function* () {
-      const passedOver = yield* store.countMessagePast(threadId, sentAt, yield* nowIso);
-      if (passedOver === 0) return;
-      const backoff = yield* store.getBackoff;
-      const ignoredStreak = backoff.ignoredStreak + passedOver;
-      yield* store.setBackoff({
-        ignoredStreak,
-        checksToSkip: checksToSkipAfterIgnoring(ignoredStreak),
-      });
-      yield* notifyChanged(threadId);
+  const recordMessagePast = Effect.fnUntraced(function* (threadId: ThreadId, sentAt: string) {
+    const passedOver = yield* store.countMessagePast(threadId, sentAt, yield* nowIso);
+    if (passedOver === 0) return;
+    const backoff = yield* store.getBackoff;
+    const ignoredStreak = backoff.ignoredStreak + passedOver;
+    yield* store.setBackoff({
+      ignoredStreak,
+      checksToSkip: checksToSkipAfterIgnoring(ignoredStreak),
     });
+    yield* notifyChanged(threadId);
+  });
 
   const start: WorthKnowingService["Service"]["start"] = Effect.fn("WorthKnowingService.start")(
     function* () {
@@ -561,8 +558,8 @@ const make = Effect.gen(function* () {
       }),
     );
 
-  const updateFinding: WorthKnowingService["Service"]["updateFinding"] = (input) =>
-    Effect.gen(function* () {
+  const updateFinding: WorthKnowingService["Service"]["updateFinding"] = Effect.fnUntraced(
+    function* (input) {
       const stored = yield* store.get(input.findingId);
       if (stored === undefined) {
         return yield* new WorthKnowingError({ message: "That finding no longer exists." });
@@ -589,7 +586,8 @@ const make = Effect.gen(function* () {
       yield* store.setBackoff({ ignoredStreak: 0, checksToSkip: 0 });
       yield* notifyChanged(finding.threadId);
       return { finding };
-    });
+    },
+  );
 
   return WorthKnowingService.of({
     start,
