@@ -313,7 +313,7 @@ const make = Effect.gen(function* () {
         // A runtime that cannot fork (OpenCode 2) is skipped quietly, not logged per run.
         Effect.catchTag("TextGenerationError", (error) =>
           error.detail === TextGeneration.SIDE_REPLY_UNSUPPORTED
-            ? Effect.succeed(undefined)
+            ? Effect.void
             : Effect.fail(error),
         ),
       );
