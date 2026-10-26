@@ -298,7 +298,6 @@ import {
   DeviceShutdownInput,
 } from "./device.ts";
 import { AgentDesktopState } from "./agentDesktop.ts";
-import {} from "./previewAutomation.ts";
 import {
   ServerConfigStreamEvent,
   DesktopUpdateCommitInput,

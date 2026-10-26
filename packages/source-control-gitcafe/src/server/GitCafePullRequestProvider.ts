@@ -413,12 +413,12 @@ export const make = Effect.gen(function* () {
         { path: `/users/${encodeURIComponent(handle)}` },
         User,
       ).pipe(
-        Effect.map(Option.some),
+        Effect.asSome,
         Effect.catchTags({
           PullRequestProviderError: (error) =>
             error.reason === "unauthenticated" || error.reason === "rate-limited"
               ? Effect.fail(error)
-              : Effect.succeed(Option.none()),
+              : Effect.succeedNone,
         }),
       );
       const actorId = Option.isSome(user)
@@ -768,12 +768,12 @@ export const make = Effect.gen(function* () {
             { path: "/auth/principal" },
             Principal,
           ).pipe(
-            Effect.map(Option.some),
+            Effect.asSome,
             Effect.catchTags({
               PullRequestProviderError: (error) =>
                 error.reason === "unauthenticated" || error.reason === "rate-limited"
                   ? Effect.fail(error)
-                  : Effect.succeed(Option.none()),
+                  : Effect.succeedNone,
             }),
           );
           if (Option.isSome(principal)) {

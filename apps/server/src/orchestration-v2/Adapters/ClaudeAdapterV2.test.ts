@@ -1359,12 +1359,11 @@ describe("ClaudeAdapterV2 resume compaction", () => {
             assert.equal(planEvent.value.plan.markdown, longPlan.trim());
           }
         }
-        const requestEvent = yield* runtime.events
-          .pipe(
-            Stream.filter((event) => event.type === "runtime_request.updated"),
-            Stream.runHead,
-          )
-          .pipe(Effect.forkScoped);
+        const requestEvent = yield* runtime.events.pipe(
+          Stream.filter((event) => event.type === "runtime_request.updated"),
+          Stream.runHead,
+          Effect.forkScoped,
+        );
         const controller = new AbortController();
         const dialog = yield* Effect.promise(() =>
           callback!(
@@ -1512,12 +1511,10 @@ describe("ClaudeAdapterV2 attachments", () => {
                 Effect.gen(function* () {
                   if (failOpen) {
                     failOpen = false;
-                    return yield* Effect.fail(
-                      new ClaudeAdapterV2.ClaudeAgentSdkQueryRunnerError({
-                        method: "open",
-                        cause: "rejected open",
-                      }),
-                    );
+                    return yield* new ClaudeAdapterV2.ClaudeAgentSdkQueryRunnerError({
+                      method: "open",
+                      cause: "rejected open",
+                    });
                   }
                   const messages = yield* Queue.unbounded<SDKMessage>();
                   return {
