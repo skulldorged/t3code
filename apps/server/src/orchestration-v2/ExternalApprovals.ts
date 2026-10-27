@@ -57,6 +57,8 @@ export interface ExternalApprovalsShape {
     readonly prompt: string;
     readonly appName?: string;
     readonly options?: ReadonlyArray<ProviderApprovalOption>;
+    /** Records the approval already answered, as full access does, so it never shows as pending. */
+    readonly decision?: "accept";
   }) => Effect.Effect<ExternalApprovalStatus, ExternalApprovalError>;
   readonly status: (input: {
     readonly threadId: ThreadId;
@@ -116,6 +118,7 @@ export const layer: Layer.Layer<
         .allocate({ threadId, turnItemId, runId: run.id })
         .pipe(Effect.mapError(fail(threadId)));
       const now = yield* DateTime.now;
+      const decided = input.decision !== undefined;
 
       const node: OrchestrationV2ExecutionNode = {
         id: nodeId,
@@ -124,7 +127,7 @@ export const layer: Layer.Layer<
         parentNodeId: providerTurn.nodeId,
         rootNodeId: run.rootNodeId ?? providerTurn.nodeId,
         kind: "approval_request",
-        status: "waiting",
+        status: decided ? "completed" : "waiting",
         countsForRun: false,
         providerThreadId: providerThread.id,
         providerTurnId: providerTurn.id,
@@ -132,7 +135,7 @@ export const layer: Layer.Layer<
         runtimeRequestId: requestId,
         checkpointScopeId: null,
         startedAt: now,
-        completedAt: null,
+        completedAt: decided ? now : null,
       };
       const request: OrchestrationV2RuntimeRequest = {
         id: requestId,
@@ -140,10 +143,11 @@ export const layer: Layer.Layer<
         providerTurnId: providerTurn.id,
         nativeRequestRef: null,
         kind: "permission",
-        status: "pending",
+        status: decided ? "resolved" : "pending",
         responseCapability: { type: "external" },
         createdAt: now,
-        resolvedAt: null,
+        resolvedAt: decided ? now : null,
+        ...(input.decision === undefined ? {} : { decision: input.decision }),
       };
       const turnItem: OrchestrationV2TurnItem = {
         id: turnItemId,
@@ -155,10 +159,10 @@ export const layer: Layer.Layer<
         nativeItemRef: null,
         parentItemId: null,
         ordinal,
-        status: "waiting",
+        status: decided ? "completed" : "waiting",
         title: null,
         startedAt: now,
-        completedAt: null,
+        completedAt: decided ? now : null,
         updatedAt: now,
         type: "approval_request",
         requestId,
@@ -184,7 +188,11 @@ export const layer: Layer.Layer<
           .ingestNormalized({ ...common, event })
           .pipe(Effect.mapError(fail(threadId)));
       }
-      return { requestId, status: request.status };
+      return {
+        requestId,
+        status: request.status,
+        ...(input.decision === undefined ? {} : { decision: input.decision }),
+      };
     });
 
     const status: ExternalApprovalsShape["status"] = Effect.fnUntraced(function* (input) {

@@ -113,30 +113,19 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
     Effect.gen(function* () {
       const threadId = yield* callingThread();
       const approvals = yield* ExternalApprovals.ExternalApprovals;
-      const raised = yield* approvals
+      // Full access approves everything the thread does without asking, as it
+      // does a provider's own approvals, so record this one already approved
+      // and no client ever shows it pending. Only the user sets a thread's
+      // mode; threads an agent starts can't exceed it.
+      const { projection } = yield* readThread(threadId);
+      return yield* approvals
         .raise({
           threadId,
           prompt: input.prompt,
           ...(input.appName === undefined ? {} : { appName: input.appName }),
           ...(input.options === undefined ? {} : { options: input.options }),
+          ...(projection.thread.runtimeMode === "full-access" ? { decision: "accept" } : {}),
         })
-        .pipe(Effect.mapError(approvalFailure));
-      // Full access approves everything the thread does without asking, as it
-      // does a provider's own approvals, so answer this one the same way. Only
-      // the user sets a thread's mode; threads an agent starts can't exceed it.
-      const { threads, projection } = yield* readThread(threadId);
-      if (projection.thread.runtimeMode !== "full-access") return raised;
-      yield* threads
-        .dispatch({
-          type: "runtime-request.respond",
-          commandId: yield* newCommandId(),
-          threadId,
-          requestId: raised.requestId,
-          decision: "accept",
-        })
-        .pipe(Effect.mapError(dispatchFailure));
-      return yield* approvals
-        .status({ threadId, requestId: raised.requestId })
         .pipe(Effect.mapError(approvalFailure));
     }),
   ),
