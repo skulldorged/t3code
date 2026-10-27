@@ -45,7 +45,6 @@ export function useWorthKnowingBannerItems(input: {
         .map((finding): ComposerBannerStackItem => ({
           id: `worth-knowing:${finding.id}`,
           variant: finding.tag === "heads_up" ? "warning" : "info",
-          priority: finding.tag === "heads_up" ? "urgent" : "notice",
           icon: <LightbulbIcon />,
           title: `${worthKnowingTagLabel(finding)}: ${finding.title}`,
           description: bannerDescription(finding),
