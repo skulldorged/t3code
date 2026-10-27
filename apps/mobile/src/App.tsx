@@ -27,6 +27,7 @@ import { CloudAuthProvider } from "./features/cloud/CloudAuthProvider";
 import { prepareNativeShowcaseCapture } from "./features/showcase/nativeShowcaseScene";
 import {
   presentPendingIncomingShare,
+  pruneIncomingShareImports,
   startIncomingShareInbox,
 } from "./features/sharing/IncomingShareProvider";
 import {
@@ -52,6 +53,14 @@ import { shouldHandleAppLink, restoreDraftLinkState } from "./lib/appLinking";
 import { hasCloudPublicConfig } from "./features/cloud/publicConfig";
 import { takeScheduledTaskNewLink } from "./features/settings/scheduled-task-editor-state";
 import {
+  resolvePendingNewTaskPromptLink,
+  takeNewTaskPromptLink,
+} from "./features/prompt-links/newTaskPromptLink";
+import {
+  resolvePendingThreadPromptLink,
+  takeThreadPromptLink,
+} from "./features/prompt-links/threadPromptLink";
+import {
   disposeOnFoundationReplace,
   type FoundationHotModule,
 } from "./lib/foundation-fast-refresh";
@@ -76,6 +85,7 @@ import {
   linkToRootPath,
   rootNavigationRef,
 } from "./lib/rootNavigation";
+import { pruneNewTaskFlowStates } from "./features/threads/new-task-flow-state";
 import { pruneNewTaskBranchCheckouts } from "./features/threads/NewTaskDraftRouteScreen";
 
 import "../global.css";
@@ -94,9 +104,13 @@ const linkingConfig = {
 
 function getAppStateFromPath(path: string, options: Parameters<typeof getStateFromPath>[1]) {
   return takeScheduledTaskNewLink(
-    restoreSettingsLinkState(
-      restoreDraftLinkState(getStateFromPath(path, options), path),
-      settingsLinkPage(),
+    takeNewTaskPromptLink(
+      takeThreadPromptLink(
+        restoreSettingsLinkState(
+          restoreDraftLinkState(getStateFromPath(path, options), path),
+          settingsLinkPage(),
+        ),
+      ),
     ),
   );
 }
@@ -131,10 +145,14 @@ const Navigation = createStaticNavigation(RootStack);
 function handleNavigationStateChange(state: NavigationState | undefined): void {
   recordWorkspaceSelections(state);
   presentPendingIncomingShare();
+  resolvePendingNewTaskPromptLink(state);
+  resolvePendingThreadPromptLink(state);
   if (!state) return;
   setAgentNotificationPathname(workspaceLocationFromState(state).pathname);
   recordAppShortcutNavigationState(state);
+  pruneNewTaskFlowStates(state);
   pruneNewTaskBranchCheckouts(state);
+  pruneIncomingShareImports(state);
 }
 
 function handleNavigationReady(): void {
