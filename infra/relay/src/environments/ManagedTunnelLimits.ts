@@ -11,7 +11,8 @@ import {
   relayManagedTunnelLimits,
 } from "../persistence/schema.ts";
 
-export const DEFAULT_MANAGED_TUNNEL_LIMIT = 3;
+// Fork: a self-hosted relay for one person, so the hosted service's cap does not apply.
+export const DEFAULT_MANAGED_TUNNEL_LIMIT = 50;
 
 export class ManagedTunnelLimitPersistenceError extends Schema.TaggedError<ManagedTunnelLimitPersistenceError>()(
   "ManagedTunnelLimitPersistenceError",

@@ -1,15 +1,10 @@
 import type { PgClient } from "@effect/sql-pg/PgClient";
 import * as Cloudflare from "alchemy/Cloudflare";
-import * as Drizzle from "alchemy/Drizzle";
-import * as Planetscale from "alchemy/Planetscale";
-import * as Alchemy from "alchemy";
-import * as RemovalPolicy from "alchemy/RemovalPolicy";
 import type { EffectPgDatabase } from "drizzle-orm/effect-postgres";
+import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-
-import { relayDatabaseMode } from "./dbConfig.ts";
 
 export class RelayDb extends Context.Service<
   RelayDb,
@@ -35,51 +30,41 @@ export class RelayTransactions extends Context.Service<
   );
 }
 
-export const PlanetscaleDatabase = Effect.gen(function* () {
-  const { stage } = yield* Alchemy.Stack;
-  const schema = yield* Drizzle.Schema("RelaySchema", {
-    schema: "./src/persistence/schema.ts",
-    out: "./migrations/postgres",
-    dialect: "postgres",
-  });
-
-  const mode = relayDatabaseMode(stage);
-  const database =
-    mode === "shared-database"
-      ? yield* Planetscale.PostgresDatabase("RelayPostgresDatabase", {
-          name: "t3coderelay",
-          region: { slug: "us-west" },
-          clusterSize: "PS_80",
-          migrations: { dir: schema.out, table: "relay_migrations" },
-          replicas: 2,
-        }).pipe(RemovalPolicy.retain())
-      : yield* Planetscale.PostgresDatabase.ref("RelayPostgresDatabase", {
-          stage: "prod",
-        });
-  const branch =
-    mode === "stage-branch"
-      ? yield* Planetscale.PostgresBranch("RelayPostgresBranch", {
-          database,
-          migrations: { dir: schema.out, table: "relay_migrations" },
-        })
-      : undefined;
-
-  const runtimeRole = yield* Planetscale.PostgresRole("RelayPostgresRuntimeRole", {
-    database,
-    ...(branch ? { branch } : {}),
-    inheritedRoles: ["pg_read_all_data", "pg_write_all_data"],
-  });
-
-  return { branch, database, runtimeRole };
-});
+/**
+ * The fork's relay database: Postgres on argo, published through a Cloudflare
+ * Tunnel behind an Access service token. Migrations run separately, with
+ * scripts/migrate-self-hosted.sh, against the database itself.
+ */
+export const RelayDatabaseOrigin = Effect.gen(function* () {
+  return {
+    scheme: "postgres" as const,
+    host: yield* Config.NonEmptyString("RELAY_DB_HOST"),
+    database: yield* Config.NonEmptyString("RELAY_DB_NAME").pipe(Config.withDefault("t3relay")),
+    user: yield* Config.NonEmptyString("RELAY_DB_USER").pipe(Config.withDefault("t3relay")),
+    password: yield* Config.Redacted("RELAY_DB_PASSWORD"),
+    accessClientId: yield* Config.Redacted("RELAY_DB_ACCESS_CLIENT_ID"),
+    accessClientSecret: yield* Config.Redacted("RELAY_DB_ACCESS_CLIENT_SECRET"),
+  };
+}).pipe(Effect.orDie);
 
 export const RelayHyperdrive = Effect.gen(function* () {
-  const { runtimeRole } = yield* PlanetscaleDatabase;
+  const origin = yield* RelayDatabaseOrigin;
   return yield* Cloudflare.Hyperdrive.Connection("RelayHyperdrive", {
-    origin: runtimeRole.origin,
+    origin,
+    // Alchemy builds a local-development origin for every binding and cannot
+    // use one behind Access; locally, argo's Postgres is reachable directly.
+    dev: {
+      scheme: "postgres",
+      host: "127.0.0.1",
+      port: 5433,
+      database: origin.database,
+      user: origin.user,
+      password: origin.password,
+      sslmode: "require",
+    },
     caching: {
       disabled: true,
     },
-    originConnectionLimit: 40,
+    originConnectionLimit: 20,
   });
 });

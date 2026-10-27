@@ -1,5 +1,4 @@
 import * as Alchemy from "alchemy";
-import * as Axiom from "alchemy/Axiom";
 import * as Cloudflare from "alchemy/Cloudflare";
 import * as Drizzle from "alchemy/Drizzle/Postgres";
 import * as Config from "effect/Config";
@@ -27,7 +26,6 @@ import {
 } from "./http/Api.ts";
 import * as RelayHttpApi from "./http/Api.ts";
 import { ManagedEndpointZone, RelayApiZone, RelayDeploymentConfig } from "./zone.ts";
-import { RelayObservability } from "./observability.ts";
 import * as Observability from "./observability.ts";
 import * as DeliveryAttempts from "./agentActivity/DeliveryAttempts.ts";
 import * as AgentActivityRows from "./agentActivity/AgentActivityRows.ts";
@@ -122,10 +120,9 @@ export const layer = Api.make(
         date: "2026-05-22",
         flags: ["nodejs_compat"],
       },
-      // Requests run several Postgres queries in sequence. At the user's edge
-      // each one paid the round trip to the database (~300 ms from JNB); next
-      // to PlanetScale `us-west` the request pays that distance once.
-      placement: { region: "aws:us-west-2" },
+      // Requests run several Postgres queries in sequence, so the Worker runs
+      // next to the database (argo, in Finland) and pays that distance once.
+      placement: { region: "aws:eu-north-1" },
       domain: relayPublicDomain,
     })),
     Effect.orDie,
@@ -140,7 +137,6 @@ export const layer = Api.make(
     const relayApiZone = yield* RelayApiZone;
     const managedEndpointZone = yield* ManagedEndpointZone;
     const randomApnsDeliveryJobSigningSecret = yield* ApnsDeliveryJobSigningSecret;
-    yield* RelayObservability;
 
     const apnsEnabled = yield* Config.Boolean("APNS_ENABLED").pipe(Config.withDefault(true));
     const apnsCredentials = apnsEnabled
@@ -485,17 +481,6 @@ export const layer = Api.make(
         // Disable the duplicate runtime span; ours applies route/header/token redaction and rejects sender traceparent.
         Layer.provideMerge(
           Alchemy.Telemetry.layer(Layer.succeed(HttpMiddleware.TracerDisabledWhen)(() => true)),
-        ),
-        Layer.provideMerge(
-          Layer.unwrap(
-            Effect.map(RelayObservability, (observability) =>
-              Axiom.Telemetry({
-                serviceName: "t3code-relay",
-                token: observability.workerIngestToken,
-                traces: observability.traces,
-              }),
-            ),
-          ),
         ),
       ),
     ),
