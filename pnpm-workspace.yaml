@@ -396,6 +396,8 @@ patchedDependencies:
   # Observe the owned host exit independently of descendants retaining its stdio.
   "@muse-code/sdk@1.4.6": patches/@muse-code__sdk@1.4.6.patch
   app-builder-lib@26.16.1: patches/app-builder-lib@26.16.1.patch
+  # Fork: background relay auth's getClerkInstance call must not swap out the native-synced token cache.
+  "@clerk/expo@4.14.0": patches/@clerk__expo@4.14.0.patch
 
 peerDependencyRules:
   allowAny:

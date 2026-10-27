@@ -1,0 +1,18 @@
+diff --git a/dist/provider/singleton/createClerkInstance.js b/dist/provider/singleton/createClerkInstance.js
+index 756f6e27374b80f3e1513b430030a721e705e9db..e4b7d16b2f8ef6ebca902463e435b2c4aa88bff7 100644
+--- a/dist/provider/singleton/createClerkInstance.js
++++ b/dist/provider/singleton/createClerkInstance.js
+@@ -54,7 +54,12 @@ function createClerkInstance(ClerkClass) {
+ 		const { __experimental_resourceCache: createResourceCache } = options || {};
+ 		const { hasConfigChanged, options: { publishableKey, proxyUrl, domain } } = getUpdatedClerkOptions(__internal_clerkOptions, options);
+ 		if (!__internal_clerk && !publishableKey) src_errorThrower.errorThrower.throwMissingPublishableKeyError();
+-		if (hasOwnOption(options, "tokenCache")) __internal_tokenCache = options.tokenCache ?? src_cache_MemoryTokenCache.MemoryTokenCache;
++		if (hasOwnOption(options, "tokenCache")) {
++			const nextTokenCache = options.tokenCache ?? src_cache_MemoryTokenCache.MemoryTokenCache;
++			// Keep the native-synced cache ClerkProvider installed: a plain cache passed by another
++			// getClerkInstance caller would read a stale client token and split this client from native.
++			if (!__internal_tokenCache.saveClientToken || nextTokenCache.saveClientToken) __internal_tokenCache = nextTokenCache;
++		}
+ 		if (!__internal_clerk || hasConfigChanged) {
+ 			(0, src_utils_errors.assertValidProxyUrl)(proxyUrl);
+ 			__internal_cancelResourceRetries?.();

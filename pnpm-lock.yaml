@@ -347,6 +347,7 @@ pnpmfileChecksum: sha256-STsbxG7+RxOFI611PrDEj1TonJgqKKllY9hYCFMLYiU=
 
 patchedDependencies:
   '@clerk/expo-native-components@0.4.0': 55436773cdb4ff2fe0ed0b8b2adf7a14eac298550a200bb1782c05aa67b09444
+  '@clerk/expo@4.14.0': cdd51fc17f9662c694c6d07f332f13a5123e74cea1da71f77b4120484568ccc1
   '@effect/vitest@4.0.5': 2731c9c3761c595f25ddc625a7d61ca376b389d5b3049ecb837c8940f21cfa02
   '@expo/fingerprint@0.21.5': 8fba80d6bbce46c72de427fe8c7907462d262a0bfe50c6b2b7ee9c4e0c61e5e1
   '@expo/metro-config@58.0.14': 90fa980e8b6480631fb2fbb04559834e3c612db40c550cd828f11be297d8d760
@@ -512,7 +513,7 @@ importers:
     dependencies:
       '@clerk/expo':
         specifier: 4.14.0
-        version: 4.14.0(509cace7a22e99472186debcea0cca69)
+        version: 4.14.0(patch_hash=cdd51fc17f9662c694c6d07f332f13a5123e74cea1da71f77b4120484568ccc1)(509cace7a22e99472186debcea0cca69)
       '@clerk/expo-native-components':
         specifier: 0.4.0
         version: 0.4.0(patch_hash=55436773cdb4ff2fe0ed0b8b2adf7a14eac298550a200bb1782c05aa67b09444)(@tsc-rs/typescript@0.8.0)(expo@58.0.14)(react-native@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(react@19.3.0)(supports-color@8.1.1)
@@ -13475,7 +13476,7 @@ snapshots:
       - supports-color
       - typescript
 
-  '@clerk/expo@4.14.0(509cace7a22e99472186debcea0cca69)':
+  '@clerk/expo@4.14.0(patch_hash=cdd51fc17f9662c694c6d07f332f13a5123e74cea1da71f77b4120484568ccc1)(509cace7a22e99472186debcea0cca69)':
     dependencies:
       '@clerk/clerk-js': 6.40.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@clerk/react': 6.18.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
