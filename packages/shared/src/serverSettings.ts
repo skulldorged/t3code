@@ -177,6 +177,35 @@ export function resolveReviewGuideModelSelection(
   return resolveSourceControlWriterModelSelection(settings, providers, projectId);
 }
 
+/**
+ * The Worth knowing observer's model: the chosen one, else the thread's own,
+ * else the text generation model, skipping any that can't generate text here.
+ */
+export function resolveWorthKnowingModelSelection(
+  settings: ServerSettings,
+  providers: ReadonlyArray<ServerProvider> | undefined,
+  projectId: ProjectId | null,
+  threadModelSelection: ModelSelection,
+): ModelSelection {
+  const usable = (selection: ModelSelection) => {
+    if (!resolveProjectProviderInstanceEnabled(settings, projectId, selection.instanceId)) {
+      return false;
+    }
+    if (providers === undefined) return true;
+    const provider = providers.find((candidate) => candidate.instanceId === selection.instanceId);
+    return (
+      provider?.enabled === true &&
+      isProviderAvailable(provider) &&
+      isProviderTextGenerationCapable(provider)
+    );
+  };
+  const chosen = settings.worthKnowingModelSelection;
+  if (chosen && usable(chosen)) return chosen;
+  return usable(threadModelSelection)
+    ? threadModelSelection
+    : settings.textGenerationModelSelection;
+}
+
 export interface PersistedServerObservabilitySettings {
   readonly otlpTracesUrl: string | undefined;
   readonly otlpMetricsUrl: string | undefined;
@@ -599,6 +628,9 @@ export function applyServerSettingsPatch(
       : {}),
     ...(patch.reviewGuideModelSelection !== undefined
       ? { reviewGuideModelSelection: patch.reviewGuideModelSelection }
+      : {}),
+    ...(patch.worthKnowingModelSelection !== undefined
+      ? { worthKnowingModelSelection: patch.worthKnowingModelSelection }
       : {}),
     ...(automaticGitFetchInterval !== undefined ? { automaticGitFetchInterval } : {}),
     ...(providerHealthRefreshInterval !== undefined ? { providerHealthRefreshInterval } : {}),

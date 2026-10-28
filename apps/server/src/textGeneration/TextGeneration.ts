@@ -21,11 +21,10 @@ export type {
   ReviewGuideGenerationResult,
   ThreadTitleGenerationInput,
   ThreadTitleGenerationResult,
-  SideReplyInput,
-  SideReplyResult,
+  WorthKnowingReplyInput,
+  WorthKnowingReplyResult,
 } from "@t3tools/provider-core/server/textGeneration";
 
-export { SIDE_REPLY_UNSUPPORTED } from "@t3tools/provider-core/server/textGeneration";
 export class TextGeneration extends Context.Service<TextGeneration, ProviderTextGeneration>()(
   "t3/textGeneration/TextGeneration",
 ) {}

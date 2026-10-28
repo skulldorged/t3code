@@ -11,7 +11,9 @@ import { useNavigate } from "@tanstack/react-router";
 import { mergeEnvironmentSettings } from "../../hooks/useSettings";
 import {
   getCustomModelOptionsByInstance,
+  resolveAppModelSelectionState,
   resolveEffectiveDefaultModelSelection,
+  selectsPlanAgent,
 } from "../../modelSelection";
 import {
   applyProviderInstanceSettings,
@@ -93,6 +95,8 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
   const mixedAgentCredits = useScopedSettingsMixed(["removeAgentCreditsOnMerge"]);
   const mixedMergeMethod = useScopedSettingsMixed(["pullRequestMergeMethod"]);
   const modelSource = useScopedSettingSource(["defaultModelSelection"]);
+  const mixedWorthKnowingEnabled = useScopedSettingsMixed(["worthKnowingEnabled"]);
+  const mixedWorthKnowingModel = useScopedSettingsMixed(["worthKnowingModelSelection"]);
   const isProjectScope = scope.kind === "project" || scope.kind === "checkout";
   const unavailable = connectedEnvironments.length === 0;
   const effective = target
@@ -127,6 +131,52 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
     }
     return null;
   }
+
+  // The observer runs one tool-less request, so only providers that generate text qualify.
+  const textGenerationProviders = providers.filter(
+    (provider) => provider.supportsTextGeneration !== false,
+  );
+  const worthKnowingEntries = sortProviderInstanceEntries(
+    applyProviderInstanceSettings(
+      deriveProviderInstanceEntries(textGenerationProviders),
+      settings,
+      target?.projectId ?? null,
+    ),
+  );
+  const usesWorthKnowingModel = settings.worthKnowingModelSelection !== null;
+  // Off, this is what switching it on starts from: the default model, if it can be used.
+  const worthKnowingSelection = resolveAppModelSelectionState(
+    {
+      ...settings,
+      textGenerationModelSelection:
+        settings.worthKnowingModelSelection ?? selection ?? settings.textGenerationModelSelection,
+    },
+    textGenerationProviders,
+  );
+  const worthKnowingModelOptions = getCustomModelOptionsByInstance(
+    settings,
+    textGenerationProviders,
+    worthKnowingSelection.instanceId,
+    worthKnowingSelection.model,
+  );
+  const worthKnowingEntry = worthKnowingEntries.find(
+    (entry) => entry.instanceId === worthKnowingSelection.instanceId,
+  );
+  const canUseWorthKnowingModel =
+    worthKnowingEntry?.enabled === true && worthKnowingEntry.isAvailable;
+
+  const setWorthKnowingModel = (value: ModelSelection | null) => {
+    const reason = value ? modelDisabledReason(value.instanceId, value.model) : null;
+    if (reason) {
+      toastManager.add({
+        type: "error",
+        title: "Worth knowing model not saved",
+        description: reason,
+      });
+      return;
+    }
+    updateSettings({ worthKnowingModelSelection: value });
+  };
 
   const setModel = (value: ModelSelection | null) => {
     const reason = value ? modelDisabledReason(value.instanceId, value.model) : null;
@@ -204,6 +254,83 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
       }
     />
   );
+  const worthKnowingModelRow =
+    settings.worthKnowingEnabled || mixedWorthKnowingEnabled ? (
+      <SettingsRow
+        serverScoped
+        settingKeys={["worthKnowingModelSelection"]}
+        mixed={mixedWorthKnowingModel}
+        {...searchableSetting("worth-knowing-model")}
+        description="Model that reads working threads for anything you might miss. A fast model is enough. Off uses each thread's own model."
+        control={
+          unavailable ? (
+            <span className="text-sm text-muted-foreground">No providers available</span>
+          ) : (
+            <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+              {(usesWorthKnowingModel || mixedWorthKnowingModel) && canUseWorthKnowingModel ? (
+                <ProviderModelPicker
+                  environmentId={representative?.environmentId ?? null}
+                  activeInstanceId={worthKnowingSelection.instanceId}
+                  model={worthKnowingSelection.model}
+                  lockedProvider={null}
+                  instanceEntries={worthKnowingEntries}
+                  modelOptionsByInstance={worthKnowingModelOptions}
+                  triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
+                  triggerAriaLabel="Worth knowing model"
+                  {...(mixedWorthKnowingModel ? { triggerLabel: "Mixed" } : {})}
+                  getModelDisabledReason={modelDisabledReason}
+                  onInstanceModelChange={(instanceId, model) =>
+                    setWorthKnowingModel(createModelSelection(instanceId, model))
+                  }
+                />
+              ) : null}
+              {usesWorthKnowingModel &&
+              !mixedWorthKnowingModel &&
+              canUseWorthKnowingModel &&
+              worthKnowingEntry ? (
+                <TraitsPicker
+                  provider={worthKnowingEntry.driverKind}
+                  models={worthKnowingEntry.models}
+                  model={worthKnowingSelection.model}
+                  modelOptions={worthKnowingSelection.options ?? []}
+                  allowPromptInjectedEffort={false}
+                  planModeEnabled={
+                    settings.planModeEnabled || selectsPlanAgent(worthKnowingSelection.options)
+                  }
+                  triggerClassName={SETTINGS_PICKER_TRIGGER_CLASSNAME}
+                  onModelOptionsChange={(options) =>
+                    setWorthKnowingModel(
+                      createModelSelection(
+                        worthKnowingSelection.instanceId,
+                        worthKnowingSelection.model,
+                        options,
+                      ),
+                    )
+                  }
+                />
+              ) : null}
+              <Switch
+                mixed={mixedWorthKnowingModel}
+                checked={mixedWorthKnowingModel ? false : usesWorthKnowingModel}
+                disabled={!usesWorthKnowingModel && !canUseWorthKnowingModel}
+                onCheckedChange={(checked) =>
+                  setWorthKnowingModel(
+                    checked
+                      ? createModelSelection(
+                          worthKnowingSelection.instanceId,
+                          worthKnowingSelection.model,
+                          worthKnowingSelection.options,
+                        )
+                      : null,
+                  )
+                }
+                aria-label="Use a separate Worth knowing model"
+              />
+            </div>
+          )
+        }
+      />
+    ) : null;
   const workspaceRow = (
     <SettingsRow
       serverScoped
@@ -265,6 +392,7 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
       ) : category === "general" ? (
         <>
           {modelRow}
+          {worthKnowingModelRow}
           <SettingsRow
             serverScoped
             settingKeys={["defaultRuntimeMode"]}

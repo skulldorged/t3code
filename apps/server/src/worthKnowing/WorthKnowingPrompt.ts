@@ -1,43 +1,35 @@
 import type { WorthKnowingTag } from "@t3tools/contracts";
 
 /**
- * The question asked of a hidden fork of the thread's own conversation. It is
- * Claude Code's "You should know" prompt word for word, apart from the product
- * name and button labels, so findings clear the same bar. T3 adds an
- * `evidence:` line for the card's source, and tells a copy taken mid-step that
- * a dangling tool call is only where it was cut.
+ * The thread's conversation, then Claude Code's "You should know" prompt word
+ * for word apart from names and where the conversation comes from, so findings
+ * clear the same bar. T3 adds `evidence:` and says the agent is still working.
  */
 export function buildWorthKnowingPrompt(input: {
-  readonly stillWorking: boolean;
+  readonly transcript: string;
   /** Learn lines of the findings offered most recently, in any thread. */
   readonly seen: ReadonlyArray<string>;
   /** Learn lines of topics the user knew already or took to the agent. */
   readonly known: ReadonlyArray<string>;
 }): string {
-  return CLAUDE_YOU_SHOULD_KNOW_PROMPT.replace("{{MID_STEP}}", () =>
-    input.stillWorking ? MID_STEP_NOTE : "",
-  )
-    .replace("{{SEEN}}", () => bulletList(input.seen))
-    .replace("{{KNOWN}}", () => bulletList(input.known));
+  const question = CLAUDE_YOU_SHOULD_KNOW_PROMPT.replace("{{SEEN}}", () =>
+    bulletList(input.seen),
+  ).replace("{{KNOWN}}", () => bulletList(input.known));
+  return `<conversation>\n${input.transcript}\n</conversation>\n\n${question}`;
 }
 
 function bulletList(lines: ReadonlyArray<string>): string {
   return lines.length > 0 ? lines.map((line) => `- ${line}`).join("\n") : "(nothing yet)";
 }
 
-// The fork resumes the session from disk while the run keeps going, so the
-// copy can end on a tool call whose result had not been written yet.
-const MID_STEP_NOTE =
-  "- This copy of the conversation was taken mid-step: if it ends with a tool call that looks interrupted, cancelled, or unanswered, that is only where the copy was cut, not something that happened. Never report it\n";
-
 const CLAUDE_YOU_SHOULD_KNOW_PROMPT = `<system-reminder>This is a side request from the user (via T3 Code's "Worth knowing" feature). You must answer it directly in this single response.
 
 IMPORTANT CONTEXT:
 - You are a separate, lightweight agent spawned to answer this one request
 - The main agent is NOT interrupted - it continues working independently in the background
-- You share the conversation context but are a completely separate instance
+- You see the conversation so far, as T3 Code recorded it, in <conversation> above, but are a completely separate instance
 - Do NOT reference being interrupted or what you were "previously doing" - that framing is incorrect
-{{MID_STEP}}
+- The main agent is still working: the conversation stops wherever it has got to, before its final reply. Never report work as unfinished, undelivered or abandoned just because the conversation stops there
 CRITICAL CONSTRAINTS:
 - You have NO tools available - you cannot read files, run commands, search, or take any actions
 - This is a one-off response - there will be no follow-up turns

@@ -482,3 +482,10 @@ export function buildThreadTitlePrompt(input: ThreadTitlePromptInput) {
 
   return { prompt, outputSchema };
 }
+
+export function buildWorthKnowingReplyPrompt(input: { readonly prompt: string }) {
+  return {
+    prompt: `${input.prompt}\n\nReturn a JSON object with one key, reply: your whole answer above, in the format requested, as one string.`,
+    outputSchema: Schema.Struct({ reply: Schema.String }),
+  };
+}

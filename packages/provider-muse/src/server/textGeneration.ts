@@ -23,6 +23,7 @@ import {
   buildCommitMessagePrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
+  buildWorthKnowingReplyPrompt,
 } from "@t3tools/provider-core/server/textGenerationPrompts";
 import {
   sanitizeCommitSubject,
@@ -340,6 +341,16 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
     });
     return { title: sanitizeThreadTitle(generated.title) };
   });
+  const generateWorthKnowingReply: ProviderTextGeneration["generateWorthKnowingReply"] = Effect.fn(
+    "MuseTextGeneration.generateWorthKnowingReply",
+  )(function* (input) {
+    const generated = yield* runMuseJson({
+      operation: "generateWorthKnowingReply",
+      ...buildWorthKnowingReplyPrompt(input),
+      modelSelection: input.modelSelection,
+    });
+    return { text: generated.reply };
+  });
   const generateReviewGuide: ProviderTextGeneration["generateReviewGuide"] = () =>
     Effect.fail(investigationUnsupported("generateReviewGuide", "Muse Code"));
   return {
@@ -347,6 +358,7 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateWorthKnowingReply,
     generateReviewGuide,
   } satisfies ProviderTextGeneration;
 });

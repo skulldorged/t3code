@@ -12,6 +12,7 @@ import {
   buildPrContentPrompt,
   buildReviewGuidePrompt,
   buildThreadTitlePrompt,
+  buildWorthKnowingReplyPrompt,
 } from "./textGenerationPrompts.ts";
 import {
   sanitizeCommitSubject,
@@ -155,6 +156,18 @@ export function fromRunner(name: string, run: Runner): ProviderTextGeneration {
     };
   });
 
+  const generateWorthKnowingReply: ProviderTextGeneration["generateWorthKnowingReply"] = Effect.fn(
+    `${name}.generateWorthKnowingReply`,
+  )(function* (input) {
+    const generated = yield* run({
+      operation: "generateWorthKnowingReply",
+      cwd: input.cwd,
+      modelSelection: input.modelSelection,
+      ...buildWorthKnowingReplyPrompt(input),
+    });
+    return { text: generated.reply };
+  });
+
   const generateReviewGuide: ProviderTextGeneration["generateReviewGuide"] = Effect.fn(
     `${name}.generateReviewGuide`,
   )(function* (input) {
@@ -172,6 +185,7 @@ export function fromRunner(name: string, run: Runner): ProviderTextGeneration {
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateWorthKnowingReply,
     generateReviewGuide,
   } satisfies ProviderTextGeneration;
 }

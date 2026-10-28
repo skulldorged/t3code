@@ -393,7 +393,7 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                       <SettingsSwitchRow
                         icon="lightbulb"
                         label="Worth knowing"
-                        subtitle="Flag what you might miss in Claude, Codex, and OpenCode threads, using a hidden copy of each thread's conversation."
+                        subtitle="While a thread works, a separate model reads its conversation and flags what you might miss."
                         value={uniform("worthKnowingEnabled")}
                         disabled={disabledFor("worthKnowingEnabled")}
                         onValueChange={(value) => write({ worthKnowingEnabled: value })}

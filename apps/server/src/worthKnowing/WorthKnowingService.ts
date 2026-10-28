@@ -1,11 +1,7 @@
 /**
- * "Worth knowing", T3's take on Claude Code's "You should know" plugin: every
- * few steps of a working run, a hidden, tool-less fork of the thread's own
- * provider session is asked whether there is one thing the user should know
- * but probably missed. The fork shares the conversation's cached prefix, so
- * it sees everything the agent saw. When to check, what to ask, and when to
- * back off follow the plugin; findings are kept per thread and streamed to
- * clients.
+ * "Worth knowing", after Claude Code's "You should know" plugin: every few steps
+ * of a working run, a tool-less request reads T3's record of the conversation,
+ * the same for every harness, and names one thing the user probably missed.
  *
  * @module worthKnowing/WorthKnowingService
  */
@@ -41,25 +37,21 @@ import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as RuntimePolicy from "../orchestration-v2/RuntimePolicy.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
+import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import { forkParked } from "../serverActivation.ts";
 import * as ServerSettings from "../serverSettings.ts";
-import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import { buildWorthKnowingPrompt, parseWorthKnowingReply } from "./WorthKnowingPrompt.ts";
 import * as WorthKnowingStore from "./WorthKnowingStore.ts";
+import { makeTranscriptReader } from "./WorthKnowingTranscript.ts";
 
 /**
  * A working run is checked at every sixth step (model request), never at its
  * first, as the plugin does. There is no check after the final answer.
  */
 const STEPS_PER_CHECK = 6;
-/**
- * Drivers checked only when a run ends. A Codex fork is a new conversation to
- * the prompt cache, so every check re-sends the whole thread uncached.
- */
-const END_OF_RUN_ONLY_DRIVERS: ReadonlySet<string> = new Set(["codex"]);
 /** How many recently offered and known topics the prompt lists, as the plugin keeps. */
 const TOPICS_IN_PROMPT = 50;
-/** Forks running at once across all threads; each is a provider process or request. */
+/** Checks running at once across all threads; each is a provider process or request. */
 const MAX_CONCURRENT_CHECKS = 2;
 /** A check that runs longer than this is abandoned. */
 const CHECK_TIMEOUT = "5 minutes";
@@ -99,7 +91,6 @@ interface RunSteps {
 interface CheckRequest {
   readonly threadId: ThreadId;
   readonly runId: RunId;
-  readonly stillWorking: boolean;
 }
 
 export class WorthKnowingService extends Context.Service<
@@ -207,10 +198,12 @@ const make = Effect.gen(function* () {
   const projects = yield* ProjectStore.ProjectStoreV2;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const providerInstances = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
+  const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
   const runtimePolicies = yield* RuntimePolicy.RuntimePolicyV2;
   const crypto = yield* Crypto.Crypto;
   const changes = yield* PubSub.unbounded<ThreadId>();
-  const forkPermits = yield* Semaphore.make(MAX_CONCURRENT_CHECKS);
+  const checkPermits = yield* Semaphore.make(MAX_CONCURRENT_CHECKS);
+  const readTranscript = makeTranscriptReader(threads);
 
   const nowIso = DateTime.now.pipe(Effect.map(DateTime.formatIso));
   const notifyChanged = (threadId: ThreadId) =>
@@ -219,19 +212,16 @@ const make = Effect.gen(function* () {
   const listThread: WorthKnowingService["Service"]["listThread"] = (threadId) =>
     store.listThread(threadId).pipe(Effect.map((rows) => rows.map((row) => row.finding)));
 
-  const isEnabledFor = (projectId: ProjectId) =>
+  const projectSettingsFor = (projectId: ProjectId) =>
     serverSettings.getSettings.pipe(
       Effect.map((settings) => resolveProjectSettings(settings, projectId).settings),
-      Effect.map((settings) => settings.worthKnowingEnabled),
-      Effect.orElseSucceed(() => false),
+      Effect.option,
     );
 
   const check = Effect.fn("WorthKnowingService.check")(function* (request: CheckRequest) {
-    const records = yield* threads.getThreadRecords(
-      request.threadId,
-      ["runs", "providerThreads", "turnItems"],
-      { runIds: [request.runId], turnItemRunIds: [request.runId] },
-    );
+    const records = yield* threads.getThreadRecords(request.threadId, ["runs"], {
+      runIds: [request.runId],
+    });
     const thread = records.thread;
     if (
       thread.deletedAt !== null ||
@@ -240,32 +230,11 @@ const make = Effect.gen(function* () {
     ) {
       return;
     }
-    if (!(yield* isEnabledFor(thread.projectId))) return;
+    const settings = yield* projectSettingsFor(thread.projectId);
+    if (Option.isNone(settings) || !settings.value.worthKnowingEnabled) return;
 
     const run = records.runs.find((candidate) => candidate.id === request.runId);
     if (run === undefined) return;
-    if (!request.stillWorking && run.status !== "completed" && run.status !== "interrupted") {
-      return;
-    }
-
-    const providerThread = records.providerThreads.find(
-      (candidate) => candidate.id === run.providerThreadId,
-    );
-    const nativeThreadId = providerThread?.nativeThreadRef?.nativeId ?? null;
-    if (nativeThreadId === null) return;
-    const instance = yield* providerInstances.getInstance(run.modelSelection.instanceId);
-    const generateSideReply = instance?.textGeneration.generateSideReply;
-    if (instance === undefined || generateSideReply === undefined) return;
-    // Like the plugin, checks happen while a run works; Codex, which cannot
-    // afford that, gets one check when the run ends instead.
-    if (request.stillWorking === END_OF_RUN_ONLY_DRIVERS.has(instance.driverKind)) return;
-    // A run that used no tools has nothing buried for the observer to dig out.
-    if (
-      !request.stillWorking &&
-      !records.turnItems.some((item) => TOOL_ITEM_TYPES.has(item.type))
-    ) {
-      return;
-    }
 
     // One finding at a time: none while one waits for an answer, and at most one per run.
     const prior = yield* store.listThread(request.threadId);
@@ -298,24 +267,24 @@ const make = Effect.gen(function* () {
       .map((finding) => finding.learn)
       .toReversed();
 
-    const reply = yield* forkPermits
-      .withPermit(
-        generateSideReply({
-          threadId: request.threadId,
-          nativeThreadId,
-          cwd,
-          modelSelection: run.modelSelection,
-          runtimePolicy,
-          prompt: buildWorthKnowingPrompt({ stillWorking: request.stillWorking, seen, known }),
-        }),
-      )
-      .pipe(
-        // A runtime that cannot fork (OpenCode 2) is skipped quietly, not logged per run.
-        Effect.catchTag("TextGenerationError", (error) =>
-          error.detail === TextGeneration.SIDE_REPLY_UNSUPPORTED ? Effect.void : Effect.fail(error),
-        ),
-      );
-    if (reply === undefined) return;
+    const modelSelection = ServerSettings.resolveWorthKnowingModelSelection(
+      settings.value,
+      yield* providerRegistry.getProviders,
+      thread.projectId,
+      run.modelSelection,
+    );
+    const generate = (yield* providerInstances.getInstance(modelSelection.instanceId))
+      ?.textGeneration.generateWorthKnowingReply;
+    if (generate === undefined) return;
+
+    const transcript = yield* readTranscript(request.threadId);
+    const reply = yield* checkPermits.withPermit(
+      generate({
+        cwd,
+        modelSelection,
+        prompt: buildWorthKnowingPrompt({ transcript: transcript.text, seen, known }),
+      }),
+    );
     const parsed = parseWorthKnowingReply(reply.text);
     if (parsed.finding === undefined && !/^\W*learn\W*:\s*none\b/im.test(reply.text)) {
       yield* Effect.logWarning("Worth knowing reply was not in the expected format", {
@@ -335,7 +304,7 @@ const make = Effect.gen(function* () {
     if (raised !== undefined && outcome === "shown") {
       const now = yield* nowIso;
       const evidenceItem =
-        raised.evidence === null ? undefined : findEvidenceItem(records.turnItems, raised.evidence);
+        raised.evidence === null ? undefined : findEvidenceItem(transcript.items, raised.evidence);
       const id = WorthKnowingFindingId.make(`wk_${yield* crypto.randomUUIDv4()}`);
       yield* store.insert({
         id,
@@ -356,7 +325,7 @@ const make = Effect.gen(function* () {
                 label: evidenceItem === undefined ? null : evidenceLabel(evidenceItem),
               },
         status: "open",
-        raisedMidRun: request.stillWorking,
+        raisedMidRun: true,
         resolvedByRunId: null,
         createdAt: now,
         updatedAt: now,
@@ -367,11 +336,9 @@ const make = Effect.gen(function* () {
     yield* Effect.logInfo("Worth knowing check finished", {
       threadId: request.threadId,
       runId: request.runId,
-      stillWorking: request.stillWorking,
+      model: `${modelSelection.instanceId}/${modelSelection.model}`,
+      transcriptChars: transcript.text.length,
       outcome,
-      inputTokens: reply.usage?.inputTokens,
-      cachedInputTokens: reply.usage?.cachedInputTokens,
-      outputTokens: reply.usage?.outputTokens,
     });
   });
 
@@ -422,8 +389,6 @@ const make = Effect.gen(function* () {
     function* () {
       const scope = yield* Effect.scope;
       const runSteps = new Map<RunId, RunSteps>();
-      // Finished runs are announced again (checkpoints, delegated results); check each once.
-      const finishedRuns = new Set<RunId>();
       const seenUserMessages = new Set<string>();
       yield* forkParked(
         Stream.runForEach(engine.streamDomainEvents, (event) => {
@@ -462,27 +427,14 @@ const make = Effect.gen(function* () {
               if (!startsStep) return Effect.void;
               steps.step += 1;
               return steps.step > 0 && steps.step % STEPS_PER_CHECK === 0
-                ? requestCheck(scope, {
-                    threadId: event.threadId,
-                    runId: item.runId,
-                    stillWorking: true,
-                  })
+                ? requestCheck(scope, { threadId: event.threadId, runId: item.runId })
                 : Effect.void;
             }
             case "run.updated": {
-              if (!ThreadManagementService.isTerminalRunStatus(event.payload.status)) {
-                return Effect.void;
+              if (ThreadManagementService.isTerminalRunStatus(event.payload.status)) {
+                runSteps.delete(event.payload.id);
               }
-              runSteps.delete(event.payload.id);
-              if (finishedRuns.has(event.payload.id)) return Effect.void;
-              remember(finishedRuns, event.payload.id);
-              return event.payload.status === "completed" || event.payload.status === "interrupted"
-                ? requestCheck(scope, {
-                    threadId: event.threadId,
-                    runId: event.payload.id,
-                    stillWorking: false,
-                  })
-                : Effect.void;
+              return Effect.void;
             }
             case "message.updated": {
               const message = event.payload;

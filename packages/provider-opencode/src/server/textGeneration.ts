@@ -6,7 +6,6 @@ import type { OpenCodeSettings } from "../settings.ts";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 
 import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
-import type { ProviderTextGeneration } from "@t3tools/provider-core/server/textGeneration";
 import * as TextGenerationOperations from "@t3tools/provider-core/server/textGenerationOperations";
 import * as OpenCodeRuntime from "./OpenCodeRuntime.ts";
 import * as OpenCodeServerOwner from "./OpenCodeServerOwner.ts";
@@ -17,7 +16,7 @@ const OpenCodeTextGenerationOperation = Schema.Literals([
   "generateBranchName",
   "generateThreadTitle",
   "generateReviewGuide",
-  "generateSideReply",
+  "generateWorthKnowingReply",
 ]);
 
 const openCodeTextGenerationErrorContext = {
@@ -346,113 +345,10 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
     return yield* TextGenerationOperations.decodeJsonReply(input, "OpenCode", rawOutput);
   });
 
-  // Forks the thread's session on the server, denies the fork every tool,
-  // asks it once and removes it, so the thread's own session is untouched.
-  const generateSideReply: NonNullable<ProviderTextGeneration["generateSideReply"]> = Effect.fn(
-    "OpenCodeTextGeneration.generateSideReply",
-  )(function* (input) {
-    const operation = "generateSideReply";
-    const fail = (detail: string, cause?: unknown) =>
-      new TextGenerationError({ operation, detail, ...(cause === undefined ? {} : { cause }) });
-    const parsedModel = OpenCodeRuntime.parseOpenCodeModelSlug(input.modelSelection.model);
-    if (!parsedModel) {
-      return yield* fail("OpenCode model selection must use the 'provider/model' format.");
-    }
-    const selectedAgent = getModelSelectionStringOptionValue(input.modelSelection, "agent");
-    const selectedVariant = getModelSelectionStringOptionValue(input.modelSelection, "variant");
-
-    const runAgainstServer = (
-      server: Pick<OpenCodeRuntime.OpenCodeServerConnection, "url" | "serverPassword" | "version">,
-    ) =>
-      Effect.gen(function* () {
-        const client = openCodeRuntime.createOpenCodeSdkClient({
-          baseUrl: server.url,
-          directory: input.cwd,
-          ...(server.serverPassword !== undefined ? { serverPassword: server.serverPassword } : {}),
-        });
-        const forked = yield* Effect.tryPromise({
-          try: (signal) => client.session.fork({ sessionID: input.nativeThreadId }, { signal }),
-          catch: (cause) => fail("OpenCode session.fork request failed.", cause),
-        });
-        const forkId = forked.data?.id;
-        if (forkId === undefined) {
-          return yield* fail("OpenCode session.fork returned no session.");
-        }
-        const removeFork = Effect.promise(() =>
-          client.session.delete({ sessionID: forkId }).catch(() => undefined),
-        );
-        return yield* Effect.gen(function* () {
-          yield* Effect.tryPromise({
-            try: (signal) =>
-              client.session.update(
-                {
-                  sessionID: forkId,
-                  permission: [{ permission: "*", pattern: "*", action: "deny" }],
-                },
-                { signal },
-              ),
-            catch: (cause) => fail("OpenCode could not restrict the forked session.", cause),
-          });
-          const result = yield* Effect.tryPromise({
-            try: (signal) =>
-              client.session.prompt(
-                {
-                  sessionID: forkId,
-                  model: parsedModel,
-                  ...(selectedAgent ? { agent: selectedAgent } : {}),
-                  ...(selectedVariant ? { variant: selectedVariant } : {}),
-                  parts: [{ type: "text", text: input.prompt }],
-                },
-                { signal },
-              ),
-            catch: (cause) => fail("OpenCode session.prompt request failed.", cause),
-          });
-          const promptFailure = getOpenCodePromptFailure(result.data?.info?.error);
-          if (promptFailure) return yield* fail(promptFailure.message);
-          const text = getOpenCodeTextResponse(result.data?.parts);
-          if (text.length === 0) return yield* fail("OpenCode returned empty output.");
-          const tokens = result.data?.info?.tokens;
-          return {
-            text,
-            ...(tokens === undefined
-              ? {}
-              : {
-                  usage: {
-                    inputTokens: tokens.input + tokens.cache.read + tokens.cache.write,
-                    cachedInputTokens: tokens.cache.read,
-                    outputTokens: tokens.output,
-                  },
-                }),
-          };
-        }).pipe(Effect.ensuring(removeFork));
-      });
-
-    return yield* (
-      openCodeSettings.serverUrl.length > 0
-        ? openCodeRuntime
-            .connectToOpenCodeServer({
-              binaryPath: openCodeSettings.binaryPath,
-              directory: input.cwd,
-              serverUrl: openCodeSettings.serverUrl,
-              ...(openCodeSettings.serverPassword
-                ? { serverPassword: openCodeSettings.serverPassword }
-                : {}),
-            })
-            .pipe(Effect.flatMap(runAgainstServer), Effect.scoped)
-        : serverOwner.withServer(runAgainstServer)
-    ).pipe(
-      Effect.catchTags({
-        OpenCodeRuntimeError: (cause) =>
-          Effect.fail(fail(OpenCodeRuntime.openCodeRuntimeErrorDetail(cause), cause)),
-      }),
-    );
-  });
-
   return {
     ...TextGenerationOperations.fromRunner(
       "OpenCodeTextGeneration",
       TextGenerationOperations.withoutInvestigation("OpenCode", runOpenCodeJson),
     ),
-    generateSideReply,
   };
 });

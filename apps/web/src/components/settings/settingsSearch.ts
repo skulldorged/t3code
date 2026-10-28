@@ -265,6 +265,15 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["new thread project provider reasoning effort"],
   },
   {
+    id: "worth-knowing-model",
+    title: "Worth knowing model",
+    to: "/settings/threads",
+    // Hidden until Worth knowing is on, so a search lands on the switch that shows it.
+    targetId: "worth-knowing",
+    scope: "project-defaults",
+    searchTerms: ["observer side agent heads up you should know findings provider"],
+  },
+  {
     id: "default-permissions",
     title: "Permissions",
     to: "/settings/threads",

@@ -1591,7 +1591,7 @@ export function ThreadsSettingsPanel() {
           serverScoped
           settingKeys={["worthKnowingEnabled"]}
           {...searchableSetting("worth-knowing")}
-          description="While a run works, a hidden copy of the thread's own conversation checks every few steps for anything you might miss, using the thread's model, as Claude Code's “You should know” does. Codex threads are checked once a run ends instead. Works with Claude, Codex, and OpenCode threads."
+          description="While a run works, a separate model reads the thread's conversation every few steps and flags anything you might miss, as Claude Code's “You should know” does. Works with every provider."
           resetAction={
             settings.worthKnowingEnabled !== DEFAULT_UNIFIED_SETTINGS.worthKnowingEnabled ? (
               <SettingResetButton

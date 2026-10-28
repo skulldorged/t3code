@@ -18,10 +18,7 @@ import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import * as OpenCodeAdapterV2 from "./adapter.ts";
 import * as OpenCode2AdapterV2 from "./v2/adapter.ts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
-import {
-  SIDE_REPLY_UNSUPPORTED,
-  type ProviderTextGeneration,
-} from "@t3tools/provider-core/server/textGeneration";
+import type { ProviderTextGeneration } from "@t3tools/provider-core/server/textGeneration";
 import { ProviderDriverError } from "@t3tools/provider-core/server/errors";
 import { openCodeUsageReader, type OpenCodeUsageReaderEnv } from "./usage.ts";
 import { readOpenCodeGoUsageLimits } from "./usageLimits.ts";
@@ -154,18 +151,18 @@ function selectOpenCodeRuntimeTextGeneration(
         v1: v1.generateReviewGuide(input),
         v2: v2.generateReviewGuide(input),
       }),
-    generateSideReply: (input) =>
+    generateWorthKnowingReply: (input) =>
       byOpenCodeRuntime(probe.get, {
-        v1: v1.generateSideReply?.(input) ?? sideReplyUnsupported,
-        v2: v2.generateSideReply?.(input) ?? sideReplyUnsupported,
+        v1: v1.generateWorthKnowingReply?.(input) ?? worthKnowingUnsupported,
+        v2: v2.generateWorthKnowingReply?.(input) ?? worthKnowingUnsupported,
       }),
   };
 }
 
-const sideReplyUnsupported = Effect.fail(
+const worthKnowingUnsupported = Effect.fail(
   new TextGenerationError({
-    operation: "generateSideReply",
-    detail: SIDE_REPLY_UNSUPPORTED,
+    operation: "generateWorthKnowingReply",
+    detail: "This OpenCode runtime cannot answer Worth knowing checks.",
   }),
 );
 

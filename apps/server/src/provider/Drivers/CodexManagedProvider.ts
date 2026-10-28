@@ -285,11 +285,14 @@ export const makeManagedCodexProvider = Effect.fn("makeManagedCodexProvider")(fu
       protect("generateThreadTitle", nativeGeneration.generateThreadTitle(value)),
     generateReviewGuide: (value) =>
       protect("generateReviewGuide", nativeGeneration.generateReviewGuide(value)),
-    ...(nativeGeneration.generateSideReply === undefined
+    ...(nativeGeneration.generateWorthKnowingReply === undefined
       ? {}
       : {
-          generateSideReply: (value) =>
-            protect("generateSideReply", nativeGeneration.generateSideReply!(value)),
+          generateWorthKnowingReply: (value) =>
+            protect(
+              "generateWorthKnowingReply",
+              nativeGeneration.generateWorthKnowingReply!(value),
+            ),
         }),
   };
   return {
