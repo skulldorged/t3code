@@ -245,7 +245,6 @@ export const makeManagedCodexProvider = Effect.fn("makeManagedCodexProvider")(fu
   const orchestrationAdapter = yield* createCodexAdapterV2(input, {
     onUsageLimits: (update) => snapshot.applyUsageLimits(update),
     resolveRuntime: runtime.resolve,
-    onManagedConnectionRevoked: runtime.auth.revoke.pipe(Effect.ignore),
   }).pipe(
     Effect.mapError(
       (cause) =>

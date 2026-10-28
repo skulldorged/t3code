@@ -2,8 +2,8 @@
 // Fork: the self-hosted relay keeps its database on argo (see src/db.ts) and
 // runs without Axiom tracing, so this stack provisions only Cloudflare.
 import * as Alchemy from "alchemy";
-import * as Cloudflare from "alchemy/Cloudflare";
-import * as Drizzle from "alchemy/Drizzle";
+import * as Cloudflare from "@alchemy.run/cloudflare";
+import * as Drizzle from "@alchemy.run/drizzle";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 

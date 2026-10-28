@@ -1,3 +1,4 @@
+// @effect-diagnostics globalTimers:off - This browser and WebView transport runs without an Effect runtime.
 /// <reference path="./novnc.d.ts" />
 /**
  * Shows an agent desktop's VNC stream in a DOM element with noVNC, and keeps
@@ -65,11 +66,10 @@ class VncChannel {
   onmessage: ((event: { readonly data: ArrayBuffer }) => void) | null = null;
   onclose: ((event: CloseEvent) => void) | null = null;
   onerror: ((event: Event) => void) | null = null;
+  private readonly socket: WebSocket;
 
-  constructor(
-    private readonly socket: WebSocket,
-    onStatus: (status: AgentDesktopStreamStatus) => void,
-  ) {
+  constructor(socket: WebSocket, onStatus: (status: AgentDesktopStreamStatus) => void) {
+    this.socket = socket;
     socket.binaryType = "arraybuffer";
     socket.addEventListener("open", (event) => this.onopen?.(event));
     socket.addEventListener("error", (event) => this.onerror?.(event));

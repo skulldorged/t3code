@@ -25,6 +25,11 @@ if (customIosBundleIdentifier && !IOS_BUNDLE_IDENTIFIER_PATTERN.test(customIosBu
 if (customIosTeamIdentifier && !/^[A-Z0-9]{10}$/.test(customIosTeamIdentifier)) {
   throw new Error("T3CODE_IOS_TEAM_ID must be a 10-character Apple developer team identifier.");
 }
+// Compiled into the native project. Without a relay, Observe's native side could dispatch to
+// Expo's own ingest before observe.ts turns it off; `.invalid` never resolves (RFC 6761).
+const observeEndpointUrl = repoEnv.T3CODE_RELAY_URL?.trim()
+  ? new URL("/v1/mobile/observe", repoEnv.T3CODE_RELAY_URL.trim()).toString()
+  : "https://observe.invalid";
 
 const fromRepoRoot = (relativePath: string) => `../../${relativePath}`;
 const androidAdaptiveForeground = "./assets/android-icon-foreground.png";
@@ -230,7 +235,7 @@ const config: ExpoConfig = {
   platforms: ["ios", "android"],
   scheme: [variant.scheme, variant.iosBundleIdentifier],
   // Release builds stamp their version: iOS needs a numeric one, Android takes the release's own.
-  version: repoEnv.T3CODE_IOS_VERSION ?? repoEnv.T3CODE_MOBILE_VERSION ?? "2.1.0",
+  version: repoEnv.T3CODE_IOS_VERSION ?? repoEnv.T3CODE_MOBILE_VERSION ?? "2.2.0",
   runtimeVersion: {
     // Skip costly fingerprinting on dev launches; preview and production OTAs require matching native projects.
     policy: runtimeVersionPolicy,
@@ -436,7 +441,7 @@ const config: ExpoConfig = {
     ["expo-sensors", { motionPermission: false }],
     // Mods run in reverse order; expo-widgets must create and wipe the target before assets are added.
     ...(!isIosPersonalTeamBuild ? ["./plugins/withWidgetLogoAsset.cjs", widgetsPlugin] : []),
-    "./plugins/withAndroidCleartextTraffic.cjs",
+    "./plugins/withAndroidNetworkSecurityConfig.cjs",
     "./plugins/withAndroidGradleHeap.cjs",
     "./plugins/withAndroidInputBackground.cjs",
     "./plugins/withAndroidModernPopupMenu.cjs",
@@ -467,6 +472,7 @@ const config: ExpoConfig = {
     },
     eas: {
       projectId: "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+      observe: { endpointUrl: observeEndpointUrl },
     },
   },
   owner: "pingdotgg",
