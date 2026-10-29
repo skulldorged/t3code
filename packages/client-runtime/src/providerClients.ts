@@ -15,6 +15,7 @@ import { museClient } from "@t3tools/provider-muse/client";
 import { openCodeClient } from "@t3tools/provider-opencode/client";
 import { piClient } from "@t3tools/provider-pi/client";
 import { zcodeClient } from "@t3tools/provider-zcode/client";
+import { kimiClient } from "@t3tools/provider-kimi/client";
 
 export const providerClients = makeProviderClientRegistry([
   {
@@ -43,6 +44,7 @@ export const providerClients = makeProviderClientRegistry([
     settingsSchema: AntigravitySettings,
   },
   zcodeClient,
+  kimiClient,
   museClient,
   piClient,
   acpRegistryClient,

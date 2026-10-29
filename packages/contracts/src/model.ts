@@ -122,6 +122,7 @@ const PI_DRIVER_KIND = ProviderDriverKind.make("pi");
 const ACP_REGISTRY_DRIVER_KIND = ProviderDriverKind.make("acpRegistry");
 const OPENCODE_DRIVER_KIND = ProviderDriverKind.make("opencode");
 const ZCODE_DRIVER_KIND = ProviderDriverKind.make("zcode");
+const KIMI_DRIVER_KIND = ProviderDriverKind.make("kimi");
 
 export const DEFAULT_MODEL = "gpt-6-astra";
 
@@ -137,6 +138,8 @@ export const ANTIGRAVITY_DEFAULT_MODEL = "antigravity-default";
 export const DEFAULT_TEXT_GENERATION_REASONING_EFFORT = "low";
 /** Keep the ZCode session's current model. Never send this ID to ACP. */
 export const ZCODE_DEFAULT_MODEL = "zcode-default";
+/** Keep the model Kimi Code's config selects. Never send this ID to ACP. */
+export const KIMI_DEFAULT_MODEL = "kimi-default";
 
 /** Let Muse pick the account's default model. Never send this ID to Muse. */
 export const MUSE_DEFAULT_MODEL = "default";
@@ -155,6 +158,7 @@ export const DEFAULT_MODEL_BY_PROVIDER: Partial<Record<ProviderDriverKind, strin
   [OPENCODE_DRIVER_KIND]: "openai/gpt-5",
   [ProviderDriverKind.make("antigravity")]: ANTIGRAVITY_DEFAULT_MODEL,
   [ZCODE_DRIVER_KIND]: ZCODE_DEFAULT_MODEL,
+  [KIMI_DRIVER_KIND]: KIMI_DEFAULT_MODEL,
 };
 
 export const DEFAULT_TEXT_GENERATION_MODEL_BY_PROVIDER: Partial<
@@ -205,4 +209,5 @@ export const PROVIDER_DISPLAY_NAMES: Partial<Record<ProviderDriverKind, string>>
   [PI_DRIVER_KIND]: "Pi",
   [OPENCODE_DRIVER_KIND]: "OpenCode",
   [ZCODE_DRIVER_KIND]: "ZCode",
+  [KIMI_DRIVER_KIND]: "Kimi Code",
 };

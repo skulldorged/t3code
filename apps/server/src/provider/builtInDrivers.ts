@@ -12,6 +12,7 @@ import { OpenCodeDriver, type OpenCodeDriverEnv } from "@t3tools/provider-openco
 import { MuseDriver, type MuseDriverEnv } from "@t3tools/provider-muse/server";
 import { PiDriver, type PiDriverEnv } from "@t3tools/provider-pi/server";
 import { ZCodeDriver, type ZCodeDriverEnv } from "@t3tools/provider-zcode/server";
+import { KimiDriver, type KimiDriverEnv } from "@t3tools/provider-kimi/server";
 import type {
   AnyProviderDriver,
   ProviderUsageReaderEnv,
@@ -28,7 +29,8 @@ export type BuiltInDriversEnv =
   | OpenCodeDriverEnv
   | PiDriverEnv
   | MuseDriverEnv
-  | ZCodeDriverEnv;
+  | ZCodeDriverEnv
+  | KimiDriverEnv;
 
 export const BUILT_IN_DRIVERS: ReadonlyArray<AnyProviderDriver<BuiltInDriversEnv>> = [
   CodexDriver,
@@ -39,6 +41,7 @@ export const BUILT_IN_DRIVERS: ReadonlyArray<AnyProviderDriver<BuiltInDriversEnv
   OpenCodeDriver,
   AntigravityDriver,
   ZCodeDriver,
+  KimiDriver,
   PiDriver,
   MuseDriver,
   AcpRegistryDriver,

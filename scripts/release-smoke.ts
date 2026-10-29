@@ -40,6 +40,7 @@ const workspaceFiles = [
   "packages/provider-muse/package.json",
   "packages/provider-opencode/package.json",
   "packages/provider-zcode/package.json",
+  "packages/provider-kimi/package.json",
   "packages/source-control-azure-devops/package.json",
   "packages/source-control-bitbucket/package.json",
   "packages/source-control-core/package.json",
