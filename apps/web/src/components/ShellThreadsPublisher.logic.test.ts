@@ -1,5 +1,6 @@
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { threadKey } from "@t3tools/client-runtime/state/entities";
-import { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, RunId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { makeThreadFixture } from "../test-fixtures";
@@ -41,13 +42,61 @@ function collect(threads: ReadonlyArray<Thread>) {
       [there, "argo"],
     ]),
     projectTitles: new Map(),
+    localLastVisitedAt: {},
     now,
   }).threads.map(
     (listed) => `${listed.environment}/${listed.id}${listed.parent ? " (child)" : ""}`,
   );
 }
 
+function finished(status: "completed" | "failed", lastVisitedAt: string | null): Partial<Thread> {
+  return {
+    lastVisitedAt,
+    latestRun: {
+      runId: RunId.make(`run-${status}`),
+      status,
+      requestedAt: "2026-10-30T11:00:00.000Z",
+      startedAt: "2026-10-30T11:00:00.000Z",
+      completedAt: "2026-10-30T11:30:00.000Z",
+      assistantMessageId: null,
+    },
+  };
+}
+
 describe("collectShellThreads", () => {
+  it("marks threads that finished since they were last opened, as the sidebar does", () => {
+    // A server that predates visit tracking sends no watermark at all.
+    const { lastVisitedAt: _untracked, ...legacy } = thread(
+      "local",
+      here,
+      finished("completed", null),
+    );
+    const unseen = (threads: ReadonlyArray<Thread>) =>
+      collectShellThreads({
+        threads,
+        delegatedUnderParent: new Set(),
+        environmentLabels: new Map(),
+        projectTitles: new Map(),
+        localLastVisitedAt: {
+          [scopedThreadKey({ environmentId: here, threadId: ThreadId.make("local") })]:
+            "2026-10-30T11:10:00.000Z",
+        },
+        now,
+      }).threads.map((listed) => `${listed.id}${listed.unseen ? " unseen" : ""}`);
+
+    expect(
+      unseen([
+        thread("done", here, finished("completed", "2026-10-30T11:10:00.000Z")),
+        thread("checked", here, finished("completed", "2026-10-30T11:40:00.000Z")),
+        // Completions in threads never opened stay quiet; failures do not.
+        thread("unopened", here, finished("completed", null)),
+        thread("failed", here, finished("failed", null)),
+        // Then this client's own watermark decides.
+        legacy,
+      ]).toSorted(),
+    ).toEqual(["checked", "done unseen", "failed unseen", "local unseen", "unopened"]);
+  });
+
   it("lists open threads and leaves settled and snoozed ones out", () => {
     expect(
       collect([

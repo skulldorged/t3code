@@ -5,6 +5,7 @@ import type { AtomRegistry } from "effect/reactivity";
 import { environmentSummaries } from "../state/presentation";
 import { environmentShell } from "../state/shell";
 import { environmentThreadShells } from "../state/threads";
+import { useUiStateStore } from "../uiStateStore";
 import { collectShellThreads } from "./ShellThreadsPublisher.logic";
 
 /**
@@ -37,6 +38,7 @@ export function startShellThreadsPublisher(registry: AtomRegistry.AtomRegistry):
       delegatedUnderParent: registry.get(environmentThreadShells.delegatedUnderParentAtom),
       environmentLabels,
       projectTitles,
+      localLastVisitedAt: useUiStateStore.getState().threadLastVisitedAtById,
       now: new Date().toISOString(),
     });
     // Running threads tick many times a second; only a changed list is sent.
@@ -55,6 +57,9 @@ export function startShellThreadsPublisher(registry: AtomRegistry.AtomRegistry):
     registry.subscribe(environmentThreadShells.threadShellsAtom, schedule, { immediate: true }),
     registry.subscribe(environmentThreadShells.delegatedUnderParentAtom, schedule),
     registry.subscribe(environmentSummaries.identitiesAtom, schedule),
+    useUiStateStore.subscribe((state, previous) => {
+      if (state.threadLastVisitedAtById !== previous.threadLastVisitedAtById) schedule();
+    }),
   ];
   // Snoozed threads wake on their own clock.
   const wake = setInterval(schedule, 60_000);

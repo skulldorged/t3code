@@ -1036,6 +1036,8 @@ export const DesktopShellThreadSchema = Schema.Struct({
   createdAt: Schema.String,
   startedAt: Schema.NullOr(Schema.String),
   completedAt: Schema.NullOr(Schema.String),
+  /** Finished or failed since the user last opened it: the sidebar's Completed or Failed mark. */
+  unseen: Schema.Boolean,
 });
 export type DesktopShellThread = typeof DesktopShellThreadSchema.Type;
 

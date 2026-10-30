@@ -1,3 +1,4 @@
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
 import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";
@@ -8,13 +9,20 @@ import {
   type EnvironmentId,
 } from "@t3tools/contracts";
 
-import { resolveSidebarThreadStatus } from "./Sidebar.logic";
+import {
+  hasUnseenCompletion,
+  hasUnseenFailure,
+  resolveSidebarThreadStatus,
+  resolveThreadLastVisitedAt,
+} from "./Sidebar.logic";
 
 export interface ShellThreadsInput {
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
   readonly delegatedUnderParent: ReadonlySet<string>;
   readonly environmentLabels: ReadonlyMap<EnvironmentId, string>;
   readonly projectTitles: ReadonlyMap<string, string>;
+  /** This client's own visit watermarks, for servers that predate visit tracking. */
+  readonly localLastVisitedAt: Readonly<Record<string, string>>;
   readonly now: string;
 }
 
@@ -67,6 +75,15 @@ export function collectShellThreads(input: ShellThreadsInput): DesktopShellThrea
     let status = resolveSidebarThreadStatus(thread);
     if (status === "ready" && thread.latestRun?.status === "failed") status = "failed";
     const parent = listedParent(thread);
+    const visited = {
+      ...thread,
+      lastVisitedAt: resolveThreadLastVisitedAt(
+        thread.lastVisitedAt,
+        input.localLastVisitedAt[
+          scopedThreadKey({ environmentId: thread.environmentId, threadId: thread.id })
+        ],
+      ),
+    };
     return {
       environmentId: thread.environmentId,
       environment: input.environmentLabels.get(thread.environmentId) ?? thread.environmentId,
@@ -79,6 +96,7 @@ export function collectShellThreads(input: ShellThreadsInput): DesktopShellThrea
       createdAt: thread.createdAt,
       startedAt: thread.latestRun?.startedAt ?? null,
       completedAt: thread.latestRun?.completedAt ?? null,
+      unseen: hasUnseenFailure(visited) || hasUnseenCompletion(visited),
     };
   };
   const activity = (thread: DesktopShellThread) => thread.startedAt ?? thread.createdAt;

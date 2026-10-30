@@ -746,7 +746,7 @@ export function hasUnseenCompletion(thread: ThreadStatusInput): boolean {
 }
 
 /** Unopened threads' failures still count as unseen, unlike completions. */
-function hasUnseenFailure(thread: ThreadStatusInput): boolean {
+export function hasUnseenFailure(thread: ThreadStatusInput): boolean {
   if (thread.latestRun?.status !== "failed") return false;
   if (!thread.lastVisitedAt) return true;
   const completedAt = Date.parse(thread.latestRun.completedAt ?? "");
