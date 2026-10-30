@@ -1053,6 +1053,7 @@ export interface DesktopBridge {
   onNotificationBadgeClear: (listener: () => void) => () => void;
   /** Publishes the sidebar's open threads for local desktop shells; see `DesktopShellThreadsSchema`. */
   publishShellThreads: (threads: DesktopShellThreads) => Promise<void>;
+  onTrackpadScrollBegin: (listener: () => void) => () => void;
   onTrackpadScrollEnd: (listener: () => void) => () => void;
   /**
    * Renderer `window.focus()` cannot raise an Electron window, and on Wayland
