@@ -1011,6 +1011,39 @@ export const DesktopPreviewRecordingSaveInputSchema = Schema.Struct({
 export const SystemSettingsPaneSchema = Schema.Literals(["full-disk-access"]);
 export type SystemSettingsPane = typeof SystemSettingsPaneSchema.Type;
 
+/**
+ * The sidebar's open threads across every connected environment, as the
+ * desktop app publishes them for local desktop shells (bars, panels) to read.
+ */
+export const DesktopShellThreadSchema = Schema.Struct({
+  environmentId: Schema.String,
+  environment: Schema.String,
+  id: Schema.String,
+  /** The thread this one is listed under: a delegated task's or subagent's parent. */
+  parent: Schema.NullOr(Schema.Struct({ environmentId: Schema.String, threadId: Schema.String })),
+  title: Schema.String,
+  project: Schema.NullOr(Schema.String),
+  status: Schema.Literals([
+    "approval",
+    "input",
+    "request",
+    "working",
+    "waiting",
+    "failed",
+    "limited",
+    "ready",
+  ]),
+  createdAt: Schema.String,
+  startedAt: Schema.NullOr(Schema.String),
+  completedAt: Schema.NullOr(Schema.String),
+});
+export type DesktopShellThread = typeof DesktopShellThreadSchema.Type;
+
+export const DesktopShellThreadsSchema = Schema.Struct({
+  threads: Schema.Array(DesktopShellThreadSchema).check(Schema.isMaxLength(1_000)),
+});
+export type DesktopShellThreads = typeof DesktopShellThreadsSchema.Type;
+
 export interface DesktopBridge {
   getAppBranding: () => DesktopAppBranding | null;
   getRelayTelemetryEnabled: () => boolean;
@@ -1018,6 +1051,8 @@ export interface DesktopBridge {
   getClientPlatform: () => string;
   setNotificationBadge: (badge: { count: number; image: string | null }) => Promise<void>;
   onNotificationBadgeClear: (listener: () => void) => () => void;
+  /** Publishes the sidebar's open threads for local desktop shells; see `DesktopShellThreadsSchema`. */
+  publishShellThreads: (threads: DesktopShellThreads) => Promise<void>;
   onTrackpadScrollEnd: (listener: () => void) => () => void;
   /**
    * Renderer `window.focus()` cannot raise an Electron window, and on Wayland
