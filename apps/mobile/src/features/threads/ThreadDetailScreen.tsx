@@ -355,6 +355,9 @@ const NO_RUN_STOP_ATOM = Atom.make<RunStopPresentation | null>(null).pipe(
   Atom.withLabel("mobile-thread-run-stop:empty"),
 );
 
+// Connection failures survive retries and app suspension.
+const RECONNECT_ERROR_DELAY_MS = 5_000;
+
 // Anchors, the submitted message, follow state and pending scrolls belong to
 // one thread, so the body remounts when the thread changes.
 export function ThreadDetailScreen(props: ThreadDetailScreenProps) {
@@ -548,6 +551,14 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
     }
   })();
   const threadSyncLabel = useDelayedStatus(selectedThreadKey, realThreadSyncLabel);
+  const connectionRetrying =
+    props.connectionStateLabel === "connecting" || props.connectionStateLabel === "reconnecting";
+  const retryError = connectionRetrying ? props.connectionError : null;
+  const retryConnectionError = useDelayedStatus(
+    `${props.environmentId}:${retryError !== null}`,
+    retryError,
+    RECONNECT_ERROR_DELAY_MS,
+  );
   const interruptThreadTurn = useAtomCommand(threadEnvironment.interruptTurn, {
     reportFailure: false,
   });
@@ -682,7 +693,7 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
   );
   const floatingStatus = ((): FloatingWorkingStatus | null => {
     const connectionStatus = connectionFloatingStatus({
-      connectionError: props.connectionError,
+      connectionError: connectionRetrying ? retryConnectionError : props.connectionError,
       connectionState: props.connectionStateLabel,
       environmentLabel: props.environmentLabel,
       onReconnect: props.onReconnectEnvironment,
