@@ -97,6 +97,29 @@ describe("collectShellThreads", () => {
     ).toEqual(["checked", "done unseen", "failed unseen", "local unseen", "unopened"]);
   });
 
+  it("counts a task as seen once its thread was opened after the task finished", () => {
+    const unseen = (parentVisit: string | null) => {
+      const parent = thread("parent", there, { lastVisitedAt: parentVisit });
+      const task = thread("task", here, {
+        ...delegatedFrom(parent),
+        ...finished("failed", null),
+      });
+      return collectShellThreads({
+        threads: [parent, task],
+        delegatedUnderParent: new Set([threadKey({ environmentId: here, threadId: task.id })]),
+        environmentLabels: new Map(),
+        projectTitles: new Map(),
+        localLastVisitedAt: {},
+        now,
+      }).threads.find((listed) => listed.id === "task")?.unseen;
+    };
+
+    // The task failed at 11:30; never opened itself, it is seen through its thread.
+    expect(unseen(null)).toBe(true);
+    expect(unseen("2026-10-30T11:10:00.000Z")).toBe(true);
+    expect(unseen("2026-10-30T11:40:00.000Z")).toBe(false);
+  });
+
   it("lists open threads and leaves settled and snoozed ones out", () => {
     expect(
       collect([

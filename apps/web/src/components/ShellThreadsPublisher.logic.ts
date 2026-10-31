@@ -71,19 +71,37 @@ export function collectShellThreads(input: ShellThreadsInput): DesktopShellThrea
     }
   }
 
+  const byKey = new Map(threads.map((thread) => [key(thread.environmentId, thread.id), thread]));
+  const ownVisit = (thread: EnvironmentThreadShell) =>
+    resolveThreadLastVisitedAt(
+      thread.lastVisitedAt,
+      input.localLastVisitedAt[
+        scopedThreadKey({ environmentId: thread.environmentId, threadId: thread.id })
+      ],
+    );
+  // A task is read from the thread it sits under, so opening that thread (or one above it)
+  // after the task finished counts as seeing it. Otherwise a task never opened on its own
+  // would keep a day-old failure unseen for good.
+  const lastVisit = (thread: EnvironmentThreadShell) => {
+    let latest = ownVisit(thread);
+    const passed = new Set([key(thread.environmentId, thread.id)]);
+    for (let ref = listedParent(thread); ref !== null;) {
+      const refKey = key(ref.environmentId, ref.threadId);
+      const above = byKey.get(refKey);
+      if (above === undefined || passed.has(refKey)) break;
+      passed.add(refKey);
+      const visit = ownVisit(above);
+      if (visit && (!latest || Date.parse(visit) > Date.parse(latest))) latest = visit;
+      ref = listedParent(above);
+    }
+    return latest;
+  };
+
   const describe = (thread: EnvironmentThreadShell): DesktopShellThread => {
     let status = resolveSidebarThreadStatus(thread);
     if (status === "ready" && thread.latestRun?.status === "failed") status = "failed";
     const parent = listedParent(thread);
-    const visited = {
-      ...thread,
-      lastVisitedAt: resolveThreadLastVisitedAt(
-        thread.lastVisitedAt,
-        input.localLastVisitedAt[
-          scopedThreadKey({ environmentId: thread.environmentId, threadId: thread.id })
-        ],
-      ),
-    };
+    const visited = { ...thread, lastVisitedAt: lastVisit(thread) };
     return {
       environmentId: thread.environmentId,
       environment: input.environmentLabels.get(thread.environmentId) ?? thread.environmentId,
