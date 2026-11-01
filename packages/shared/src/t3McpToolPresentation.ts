@@ -68,7 +68,8 @@ export type T3McpToolSummaryAction =
   | "browser"
   | "device"
   | "html-preview"
-  | "html-render";
+  | "html-render"
+  | "fleet";
 
 export interface T3McpToolDefinition {
   readonly displayName: string;
@@ -377,6 +378,37 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
   t3_thread_send_attachments: tool(["Send", "Sending", "Sent", "attachments"], "attachment-send"),
   html_preview: tool(["Preview", "Previewing", "Previewed", "an HTML page"], "html-preview"),
   html_render: tool(["Render", "Rendering", "Rendered", "an HTML page"], "html-render"),
+  // Mars's fleet, on hosts that have it (apps/server/src/fleet/FleetTools.ts).
+  fleet_where: tool(["Check", "Checking", "Checked", "a fleet machine"], "fleet"),
+  fleet_run: tool(["Run", "Running", "Ran", "a command on a fleet host"], "fleet"),
+  fleet_job_run: tool(["Start", "Starting", "Started", "a fleet job"], "fleet"),
+  fleet_job_wait: tool(["Wait for", "Waiting for", "Waited for", "a fleet job"], "fleet"),
+  fleet_job_output: tool(["Read", "Reading", "Read", "fleet job output"], "fleet"),
+  fleet_job_list: tool(["List", "Listing", "Listed", "fleet jobs"], "fleet"),
+  fleet_job_stop: tool(["Stop", "Stopping", "Stopped", "a fleet job"], "fleet"),
+  fleet_copy: tool(["Copy", "Copying", "Copied", "files between hosts"], "fleet"),
+  fleet_sync: tool(["Mirror", "Mirroring", "Mirrored", "a checkout to a host"], "fleet"),
+  fleet_wait_host: tool(["Wait for", "Waiting for", "Waited for", "a fleet host"], "fleet"),
+  fleet_elevate: tool(["Ask for", "Asking for", "Asked for", "root"], "fleet"),
+  fleet_elevate_status: tool(["Check", "Checking", "Checked", "a root request"], "fleet"),
+  fleet_switch: tool(["Build", "Building", "Built", "a system config"], "fleet"),
+  fleet_secret: tool(["Use", "Using", "Used", "a fleet secret"], "fleet"),
+  fleet_stats: tool(["Check", "Checking", "Checked", "fleet activity"], "fleet"),
+  fleet_mail: tool(["Use", "Using", "Used", "the mailbox"], "fleet"),
+  fleet_desktop_start: tool(["Start", "Starting", "Started", "a fleet desktop"], "fleet", "device"),
+  fleet_desktop_look: tool(
+    ["Look at", "Looking at", "Looked at", "a fleet desktop"],
+    "fleet",
+    "device",
+  ),
+  fleet_desktop_act: tool(["Use", "Using", "Used", "a fleet desktop"], "fleet", "device"),
+  fleet_desktop: tool(["Manage", "Managing", "Managed", "fleet desktops"], "fleet", "device"),
+  fleet_browser: tool(["Use", "Using", "Used", "the shared browser"], "fleet", "browser"),
+  fleet_vault: tool(["Use", "Using", "Used", "the vault"], "fleet"),
+  fleet_device: tool(["Use", "Using", "Used", "an Android device"], "fleet", "device"),
+  fleet_container: tool(["Use", "Using", "Used", "a project container"], "fleet"),
+  fleet_vm: tool(["Use", "Using", "Used", "a host VM"], "fleet"),
+  fleet_diag: tool(["Check", "Checking", "Checked", "macOS diagnostics"], "fleet"),
 };
 
 export const T3_MCP_TOOL_NAMES: ReadonlySet<string> = new Set(Object.keys(T3_MCP_TOOLS));

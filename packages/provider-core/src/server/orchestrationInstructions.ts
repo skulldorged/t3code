@@ -36,6 +36,28 @@ export const T3_CODE_BROWSER_TOOL_INSTRUCTIONS = `
 When browser work was asked, \`preview_*\` is the browser you share with the user: \`preview_status\` first, then \`preview_open\` if no tab can be automated. Prefer snapshot locators over coordinates. Switch browsers only if the tools are absent or \`preview_open\` says unsupported, the user asks, or two preview calls fail on one step. Then quote the error and switch.
 `;
 
+let hostToolInstructions: string | undefined;
+
+/**
+ * Instructions for tools the host adds to T3's MCP server (Mars's fleet: its
+ * description of the machine and how to use its tools). The server sets them
+ * once it knows them; sessions with T3's tools get them with the rest.
+ */
+export function setHostToolInstructions(text: string | undefined): void {
+  hostToolInstructions = text?.trim() || undefined;
+}
+
+export function t3HostToolInstructions(): string | undefined {
+  return hostToolInstructions;
+}
+
+/** Claude Code defers MCP tools behind ToolSearch, so its copy says how to load them. */
+export function t3HostToolInstructionsWithToolSearch(): string | undefined {
+  return hostToolInstructions === undefined
+    ? undefined
+    : `${hostToolInstructions}\n\nThese tools are deferred: load them with ToolSearch, such as \`select:mcp__t3-code__fleet_run,mcp__t3-code__fleet_job_run\` or a keyword search for "fleet".`;
+}
+
 const T3_CODE_DEVICE_TOOLS = ["device_list", "device_open", "device_screenshot", "device_close"];
 
 const deviceToolInstructions = (loadTools: string) => `## T3 Code devices
@@ -96,6 +118,7 @@ export function t3AcpPromptWithInstructions(input: {
       ? [
           T3_CODE_BROWSER_TOOL_INSTRUCTIONS.trim(),
           ...(input.state.hasDeviceTools ? [T3_CODE_DEVICE_TOOL_INSTRUCTIONS] : []),
+          ...(hostToolInstructions === undefined ? [] : [hostToolInstructions]),
           T3_CODE_ORCHESTRATION_INSTRUCTIONS.trim(),
           T3_CODE_ACP_MCP_FALLBACK_INSTRUCTIONS,
         ]
@@ -105,9 +128,11 @@ export function t3AcpPromptWithInstructions(input: {
 }
 
 const orchestrationInstructions = (hasDeviceTools: boolean) =>
-  hasDeviceTools
-    ? `${T3_CODE_ORCHESTRATION_INSTRUCTIONS}\n${T3_CODE_DEVICE_TOOL_INSTRUCTIONS}\n`
-    : T3_CODE_ORCHESTRATION_INSTRUCTIONS;
+  [
+    T3_CODE_ORCHESTRATION_INSTRUCTIONS,
+    ...(hasDeviceTools ? [`${T3_CODE_DEVICE_TOOL_INSTRUCTIONS}\n`] : []),
+    ...(hostToolInstructions === undefined ? [] : [`${hostToolInstructions}\n`]),
+  ].join("\n");
 
 function prependT3OrchestrationInstructions(prompt: string, instructions: string): string {
   return `<t3_code_orchestration_instructions>${instructions.trim()}</t3_code_orchestration_instructions>\n\n<user_request>\n${prompt}\n</user_request>`;

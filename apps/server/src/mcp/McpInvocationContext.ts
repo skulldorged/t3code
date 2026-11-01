@@ -106,6 +106,14 @@ export interface McpInvocationScope {
   readonly client: McpClientCaller | undefined;
   /** False while the Linked environments beta is off here; `/mcp` reads it per request. */
   readonly linkedEnvironments?: boolean;
+  /**
+   * How the calling thread's provider reached `/mcp`, for tools that run its
+   * commands (fleet's), which reach T3 as that thread the same way.
+   */
+  readonly threadCredential?: {
+    readonly endpoint: string;
+    readonly authorization: string;
+  };
 }
 
 /**
