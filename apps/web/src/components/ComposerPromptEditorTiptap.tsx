@@ -70,11 +70,12 @@ import {
   ComposerListExtensions,
   buildTiptapContent,
   caretTakesMarksBefore,
-  ComposerBoldExtension,
   ComposerBoldSelectionOnlyExtension,
   convertBulletItemToTask,
   ComposerCodeExtension,
+  ComposerBoldExtension,
   ComposerItalicExtension,
+  ComposerStrikeExtension,
   ComposerTaskItemExtension,
   ComposerTaskListExtension,
   flatToMarkdown,
@@ -841,7 +842,7 @@ function createComposerExtensions(richText: boolean) {
       undoRedo: { newGroupDelay: COMPOSER_UNDO_GROUP_DELAY },
       bold: false,
       italic: false,
-      ...(richText ? {} : { strike: false }),
+      strike: false,
     }),
     ComposerUndoGroupingExtension,
     ComposerTextDirectionExtension,
@@ -853,8 +854,9 @@ function createComposerExtensions(richText: boolean) {
     ...(richText
       ? [
           ComposerBoldSelectionOnlyExtension,
-          ComposerBoldExtension,
           ComposerItalicExtension,
+          ComposerBoldExtension,
+          ComposerStrikeExtension,
           ComposerCodeExtension,
           ComposerCodeBlockExtension.extend({
             addNodeView() {

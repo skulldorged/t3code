@@ -78,130 +78,134 @@ export const ZCodeDriver: ProviderDriver<ZCodeSettings, ZCodeDriverEnv> = {
   },
   configSchema: ZCodeSettings,
   defaultConfig: (): ZCodeSettings => decodeZCodeSettings({}),
-  create: ({ instanceId, displayName, accentColor, environment, enabled, config }) =>
-    Effect.gen(function* () {
-      const crypto = yield* Crypto.Crypto;
-      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-      const httpClient = yield* HttpClient.HttpClient;
-      const latestVersions = yield* ProviderLatestVersions.ProviderLatestVersions;
-      const host = yield* ProviderHost.ProviderHost;
-      const processEnv = yield* mergeProviderInstanceEnvironment(environment);
-      const continuationIdentity = defaultProviderContinuationIdentity({
-        driverKind: DRIVER_KIND,
-        instanceId,
-      });
-      const stampIdentity = withInstanceIdentity({
-        instanceId,
-        driverKind: DRIVER_KIND,
-        displayName,
-        accentColor,
-        continuationGroupKey: continuationIdentity.continuationKey,
-      });
-      const effectiveConfig = { ...config, enabled } satisfies ZCodeSettings;
-      // Models and commands come from live sessions: listing them needs a
-      // session, and status checks must not open one.
-      const liveState = yield* makeZCodeLiveState;
-      const orchestrationAdapter = yield* createZCodeAdapterV2({
-        instanceId,
-        displayName,
-        accentColor,
-        environment,
-        enabled,
-        config,
-        liveState,
-      }).pipe(
-        Effect.mapError(
-          (cause) =>
-            new ProviderDriverError({
-              driver: DRIVER_KIND,
-              instanceId,
-              detail: "Failed to build ZCode orchestration adapter.",
-              cause,
-            }),
-        ),
-      );
+  create: Effect.fn("ZCodeDriver.create")(function* ({
+    instanceId,
+    displayName,
+    accentColor,
+    environment,
+    enabled,
+    config,
+  }) {
+    const crypto = yield* Crypto.Crypto;
+    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+    const httpClient = yield* HttpClient.HttpClient;
+    const latestVersions = yield* ProviderLatestVersions.ProviderLatestVersions;
+    const host = yield* ProviderHost.ProviderHost;
+    const processEnv = yield* mergeProviderInstanceEnvironment(environment);
+    const continuationIdentity = defaultProviderContinuationIdentity({
+      driverKind: DRIVER_KIND,
+      instanceId,
+    });
+    const stampIdentity = withInstanceIdentity({
+      instanceId,
+      driverKind: DRIVER_KIND,
+      displayName,
+      accentColor,
+      continuationGroupKey: continuationIdentity.continuationKey,
+    });
+    const effectiveConfig = { ...config, enabled } satisfies ZCodeSettings;
+    // Models and commands come from live sessions: listing them needs a
+    // session, and status checks must not open one.
+    const liveState = yield* makeZCodeLiveState;
+    const orchestrationAdapter = yield* createZCodeAdapterV2({
+      instanceId,
+      displayName,
+      accentColor,
+      environment,
+      enabled,
+      config,
+      liveState,
+    }).pipe(
+      Effect.mapError(
+        (cause) =>
+          new ProviderDriverError({
+            driver: DRIVER_KIND,
+            instanceId,
+            detail: "Failed to build ZCode orchestration adapter.",
+            cause,
+          }),
+      ),
+    );
 
-      const checkProvider = checkZCodeProviderStatus(
-        effectiveConfig,
-        processEnv,
-        host.paths.cwd,
-      ).pipe(
-        Effect.map((draft) => ({ ...stampIdentity(draft), supportsTextGeneration: false })),
-        Effect.flatMap((provider) =>
-          liveState.get.pipe(
-            Effect.map((state) =>
-              applyZCodeLiveState(provider, state, effectiveConfig.customModels),
-            ),
-          ),
+    const checkProvider = checkZCodeProviderStatus(
+      effectiveConfig,
+      processEnv,
+      host.paths.cwd,
+    ).pipe(
+      Effect.map((draft) => ({ ...stampIdentity(draft), supportsTextGeneration: false })),
+      Effect.flatMap((provider) =>
+        liveState.get.pipe(
+          Effect.map((state) => applyZCodeLiveState(provider, state, effectiveConfig.customModels)),
         ),
-        Effect.provideService(Crypto.Crypto, crypto),
-        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
-      );
+      ),
+      Effect.provideService(Crypto.Crypto, crypto),
+      Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+    );
 
-      const liveSnapshotSemaphore = yield* Semaphore.make(1);
-      const snapshotSettings = yield* makeProviderSnapshotSettingsSource(effectiveConfig);
-      const snapshot = yield* makeManagedServerProvider<ProviderSnapshotSettings<ZCodeSettings>>({
-        resolveMaintenance: () => Effect.succeed(MAINTENANCE),
-        getSettings: snapshotSettings.getSettings,
-        streamSettings: snapshotSettings.streamSettings,
-        haveSettingsChanged: haveProviderSnapshotSettingsChanged,
-        initialSnapshot: (settings) =>
-          buildInitialZCodeProviderSnapshot(settings.provider).pipe(
-            Effect.map((draft) => ({ ...stampIdentity(draft), supportsTextGeneration: false })),
-          ),
-        checkProvider,
-        enrichSnapshot: ({ settings, snapshot: currentSnapshot, getSnapshot, publishSnapshot }) => {
-          const publishAdvisory = enrichZCodeSnapshot({
-            snapshot: currentSnapshot,
-            maintenanceCapabilities: MAINTENANCE,
-            enableProviderUpdateChecks: settings.enableProviderUpdateChecks,
-            publishSnapshot,
-          }).pipe(
-            Effect.provideService(HttpClient.HttpClient, httpClient),
-            Effect.provideService(ProviderLatestVersions.ProviderLatestVersions, latestVersions),
-          );
-          if (!currentSnapshot.installed) return publishAdvisory;
-          // Republish whenever a live session advertises new models or commands.
-          const followLiveState = liveState.changes.pipe(
-            Stream.runForEach((state) =>
-              liveSnapshotSemaphore.withPermit(
-                getSnapshot.pipe(
-                  Effect.flatMap((current: ServerProvider) =>
-                    publishSnapshot(
-                      applyZCodeLiveState(current, state, effectiveConfig.customModels),
-                    ),
+    const liveSnapshotSemaphore = yield* Semaphore.make(1);
+    const snapshotSettings = yield* makeProviderSnapshotSettingsSource(effectiveConfig);
+    const snapshot = yield* makeManagedServerProvider<ProviderSnapshotSettings<ZCodeSettings>>({
+      resolveMaintenance: () => Effect.succeed(MAINTENANCE),
+      getSettings: snapshotSettings.getSettings,
+      streamSettings: snapshotSettings.streamSettings,
+      haveSettingsChanged: haveProviderSnapshotSettingsChanged,
+      initialSnapshot: (settings) =>
+        buildInitialZCodeProviderSnapshot(settings.provider).pipe(
+          Effect.map((draft) => ({ ...stampIdentity(draft), supportsTextGeneration: false })),
+        ),
+      checkProvider,
+      enrichSnapshot: ({ settings, snapshot: currentSnapshot, getSnapshot, publishSnapshot }) => {
+        const publishAdvisory = enrichZCodeSnapshot({
+          snapshot: currentSnapshot,
+          maintenanceCapabilities: MAINTENANCE,
+          enableProviderUpdateChecks: settings.enableProviderUpdateChecks,
+          publishSnapshot,
+        }).pipe(
+          Effect.provideService(HttpClient.HttpClient, httpClient),
+          Effect.provideService(ProviderLatestVersions.ProviderLatestVersions, latestVersions),
+        );
+        if (!currentSnapshot.installed) return publishAdvisory;
+        // Republish whenever a live session advertises new models or commands.
+        const followLiveState = liveState.changes.pipe(
+          Stream.runForEach((state) =>
+            liveSnapshotSemaphore.withPermit(
+              getSnapshot.pipe(
+                Effect.flatMap((current: ServerProvider) =>
+                  publishSnapshot(
+                    applyZCodeLiveState(current, state, effectiveConfig.customModels),
                   ),
                 ),
               ),
             ),
-          );
-          return Effect.all([publishAdvisory, followLiveState], {
-            concurrency: "unbounded",
-            discard: true,
-          });
-        },
-      }).pipe(
-        Effect.mapError(
-          (cause) =>
-            new ProviderDriverError({
-              driver: DRIVER_KIND,
-              instanceId,
-              detail: "Failed to build ZCode snapshot.",
-              cause,
-            }),
-        ),
-      );
+          ),
+        );
+        return Effect.all([publishAdvisory, followLiveState], {
+          concurrency: "unbounded",
+          discard: true,
+        });
+      },
+    }).pipe(
+      Effect.mapError(
+        (cause) =>
+          new ProviderDriverError({
+            driver: DRIVER_KIND,
+            instanceId,
+            detail: "Failed to build ZCode snapshot.",
+            cause,
+          }),
+      ),
+    );
 
-      return {
-        instanceId,
-        driverKind: DRIVER_KIND,
-        continuationIdentity,
-        displayName,
-        accentColor,
-        enabled,
-        snapshot,
-        orchestrationAdapter,
-        textGeneration: makeUnsupportedTextGeneration(),
-      } satisfies ProviderInstance;
-    }),
+    return {
+      instanceId,
+      driverKind: DRIVER_KIND,
+      continuationIdentity,
+      displayName,
+      accentColor,
+      enabled,
+      snapshot,
+      orchestrationAdapter,
+      textGeneration: makeUnsupportedTextGeneration(),
+    } satisfies ProviderInstance;
+  }),
 };

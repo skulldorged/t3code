@@ -147,28 +147,27 @@ export function buildInitialZCodeProviderSnapshot(
  * starts ZCode's app-server only for a session, so this never opens one, never
  * boots the workspace's MCP servers, and spends no plan quota.
  */
-const probeZCodeBridge = (
+const probeZCodeBridge = Effect.fn("probeZCodeBridge")(function* (
   zcodeSettings: ZCodeSettings,
   environment: NodeJS.ProcessEnv,
   cwd: string,
-) =>
-  Effect.gen(function* () {
-    const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-    const acp = yield* makeZCodeAcpRuntime({
-      zcodeSettings,
-      environment,
-      childProcessSpawner,
-      cwd,
-      clientInfo: { name: "t3-code-provider-probe", version: "0.0.0" },
-    });
-    const initialized = yield* acp.initialize();
-    return {
-      version: initialized.agentInfo?.version?.trim() || null,
-      hasZCodeCredentials: (initialized.authMethods ?? []).some(
-        (method) => method.id === ZCODE_ACP_AUTH_METHOD_ID,
-      ),
-    };
-  }).pipe(Effect.scoped);
+) {
+  const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const acp = yield* makeZCodeAcpRuntime({
+    zcodeSettings,
+    environment,
+    childProcessSpawner,
+    cwd,
+    clientInfo: { name: "t3-code-provider-probe", version: "0.0.0" },
+  });
+  const initialized = yield* acp.initialize();
+  return {
+    version: initialized.agentInfo?.version?.trim() || null,
+    hasZCodeCredentials: (initialized.authMethods ?? []).some(
+      (method) => method.id === ZCODE_ACP_AUTH_METHOD_ID,
+    ),
+  };
+}, Effect.scoped);
 
 export const checkZCodeProviderStatus = Effect.fn("checkZCodeProviderStatus")(function* (
   zcodeSettings: ZCodeSettings,
