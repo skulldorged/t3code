@@ -24,7 +24,11 @@ export function watchWorthKnowingNotifications(
   registry: AtomRegistry.AtomRegistry,
   router: AnyRouter,
   environmentId: EnvironmentId,
-  onNotification: (environmentId: EnvironmentId, notification: Notification) => void,
+  onNotification: (
+    environmentId: EnvironmentId,
+    threadId: ThreadId,
+    notification: Notification,
+  ) => void,
 ): () => void {
   // Null until the first snapshot, which only records what was already raised.
   let previous: Map<ThreadId, string> | null = null;
@@ -107,7 +111,7 @@ export function watchWorthKnowingNotifications(
             tag: `${environmentId}:${summary.threadId}:worth-knowing`,
             silent: true,
           });
-          onNotification(environmentId, notification);
+          onNotification(environmentId, summary.threadId, notification);
           notification.addEventListener("click", () => {
             notification.close();
             window.focus();

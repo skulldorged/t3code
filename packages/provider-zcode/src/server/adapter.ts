@@ -5,7 +5,7 @@ import {
   ProviderDriverKind,
   type OrchestrationV2ProviderCapabilities,
 } from "@t3tools/contracts";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -77,7 +77,7 @@ export interface ZCodeAdapterV2Options {
   ) => Effect.Effect<
     AcpSessionRuntime.AcpSessionRuntime["Service"],
     EffectAcpErrors.AcpError,
-    Crypto.Crypto | Scope.Scope
+    SecureRandom.SecureRandom | Scope.Scope
   >;
   readonly assertComplete?: Effect.Effect<void, EffectAcpErrors.AcpError>;
 }
@@ -141,7 +141,7 @@ export const makeZCodeAdapterV2 = Effect.fn("makeZCodeAdapterV2")(function* (
 
 export type ZCodeAdapterV2DriverEnv =
   | ChildProcessSpawner.ChildProcessSpawner
-  | Crypto.Crypto
+  | SecureRandom.SecureRandom
   | FileSystem.FileSystem
   | IdAllocator.IdAllocatorV2
   | Path.Path

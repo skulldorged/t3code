@@ -1,6 +1,6 @@
 import { ProviderDriverKind, type ServerProvider, TextGenerationError } from "@t3tools/contracts";
 import { ZCodeSettings } from "../settings.ts";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
@@ -66,7 +66,7 @@ export type ZCodeDriverEnv =
   | ZCodeAdapterV2DriverEnv
   | ProviderHost.ProviderHost
   | ChildProcessSpawner.ChildProcessSpawner
-  | Crypto.Crypto
+  | SecureRandom.SecureRandom
   | HttpClient.HttpClient
   | ProviderLatestVersions.ProviderLatestVersions;
 
@@ -86,7 +86,7 @@ export const ZCodeDriver: ProviderDriver<ZCodeSettings, ZCodeDriverEnv> = {
     enabled,
     config,
   }) {
-    const crypto = yield* Crypto.Crypto;
+    const random = yield* SecureRandom.SecureRandom;
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const httpClient = yield* HttpClient.HttpClient;
     const latestVersions = yield* ProviderLatestVersions.ProviderLatestVersions;
@@ -138,7 +138,7 @@ export const ZCodeDriver: ProviderDriver<ZCodeSettings, ZCodeDriverEnv> = {
           Effect.map((state) => applyZCodeLiveState(provider, state, effectiveConfig.customModels)),
         ),
       ),
-      Effect.provideService(Crypto.Crypto, crypto),
+      Effect.provideService(SecureRandom.SecureRandom, random),
       Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
     );
 

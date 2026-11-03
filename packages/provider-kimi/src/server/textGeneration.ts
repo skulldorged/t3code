@@ -1,4 +1,4 @@
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
@@ -22,7 +22,7 @@ export const makeKimiTextGeneration = Effect.fn("makeKimiTextGeneration")(functi
   kimiSettings: KimiSettings,
   environment: NodeJS.ProcessEnv = process.env,
 ) {
-  const crypto = yield* Crypto.Crypto;
+  const random = yield* SecureRandom.SecureRandom;
   const commandSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 
   const runKimiJson: TextGenerationOperations.Runner = Effect.fn("KimiTextGeneration.runKimiJson")(
@@ -39,7 +39,7 @@ export const makeKimiTextGeneration = Effect.fn("makeKimiTextGeneration")(functi
         cwd,
         clientInfo: { name: "t3-code-git-text", version: "0.0.0" },
         authenticateOnAuthRequired: false,
-      }).pipe(Effect.provideService(Crypto.Crypto, crypto));
+      }).pipe(Effect.provideService(SecureRandom.SecureRandom, random));
 
       yield* runtime.handleSessionUpdate((notification) => {
         const update = notification.update;

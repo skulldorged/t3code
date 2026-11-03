@@ -7,7 +7,7 @@ import {
   type RuntimeMode,
 } from "@t3tools/contracts";
 import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -70,7 +70,7 @@ export const makeKimiAcpRuntime = Effect.fn("makeKimiAcpRuntime")(function* (
 ): Effect.fn.Return<
   AcpSessionRuntime.AcpSessionRuntime["Service"],
   EffectAcpErrors.AcpError,
-  Crypto.Crypto | Scope.Scope
+  SecureRandom.SecureRandom | Scope.Scope
 > {
   const { kimiSettings, environment, childProcessSpawner, ...options } = input;
   const acpContext = yield* Layer.build(

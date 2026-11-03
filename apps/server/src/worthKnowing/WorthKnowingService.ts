@@ -21,7 +21,7 @@ import {
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -200,7 +200,7 @@ const make = Effect.gen(function* () {
   const providerInstances = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
   const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
   const runtimePolicies = yield* RuntimePolicy.RuntimePolicyV2;
-  const crypto = yield* Crypto.Crypto;
+  const random = yield* SecureRandom.SecureRandom;
   const changes = yield* PubSub.unbounded<ThreadId>();
   const checkPermits = yield* Semaphore.make(MAX_CONCURRENT_CHECKS);
   const readTranscript = makeTranscriptReader(threads);
@@ -305,7 +305,7 @@ const make = Effect.gen(function* () {
       const now = yield* nowIso;
       const evidenceItem =
         raised.evidence === null ? undefined : findEvidenceItem(transcript.items, raised.evidence);
-      const id = WorthKnowingFindingId.make(`wk_${yield* crypto.randomUUIDv4()}`);
+      const id = WorthKnowingFindingId.make(`wk_${yield* random.uuidV4()}`);
       yield* store.insert({
         id,
         threadId: request.threadId,

@@ -1,6 +1,6 @@
 import { ProviderDriverKind, type ServerProvider } from "@t3tools/contracts";
 import { KimiSettings } from "../settings.ts";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -67,7 +67,7 @@ export type KimiDriverEnv =
   | KimiAdapterV2DriverEnv
   | ProviderHost.ProviderHost
   | ChildProcessSpawner.ChildProcessSpawner
-  | Crypto.Crypto
+  | SecureRandom.SecureRandom
   | FileSystem.FileSystem
   | HttpClient.HttpClient
   | Path.Path
@@ -89,7 +89,7 @@ export const KimiDriver: ProviderDriver<KimiSettings, KimiDriverEnv> = {
     enabled,
     config,
   }) {
-    const crypto = yield* Crypto.Crypto;
+    const random = yield* SecureRandom.SecureRandom;
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const httpClient = yield* HttpClient.HttpClient;
     const fileSystem = yield* FileSystem.FileSystem;
@@ -155,7 +155,7 @@ export const KimiDriver: ProviderDriver<KimiSettings, KimiDriverEnv> = {
       Effect.flatMap((provider) =>
         liveState.get.pipe(Effect.map((state) => withLiveUsage(provider, state))),
       ),
-      Effect.provideService(Crypto.Crypto, crypto),
+      Effect.provideService(SecureRandom.SecureRandom, random),
       Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
     );
 

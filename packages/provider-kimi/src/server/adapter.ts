@@ -6,7 +6,7 @@ import {
   type OrchestrationV2ProviderCapabilities,
   type ServerProviderUsageLimits,
 } from "@t3tools/contracts";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -105,7 +105,7 @@ const withKimiTurnChecks = Effect.fn("withKimiTurnChecks")(function* (input: {
   ) => Effect.Effect<
     AcpSessionRuntime.AcpSessionRuntime["Service"],
     EffectAcpErrors.AcpError,
-    Crypto.Crypto | Scope.Scope
+    SecureRandom.SecureRandom | Scope.Scope
   >;
   readonly readUsageLimits: Effect.Effect<ServerProviderUsageLimits>;
   readonly liveState: KimiLiveState | undefined;
@@ -210,7 +210,7 @@ export const makeKimiAdapterV2 = Effect.fn("makeKimiAdapterV2")(function* (
 
 export type KimiAdapterV2DriverEnv =
   | ChildProcessSpawner.ChildProcessSpawner
-  | Crypto.Crypto
+  | SecureRandom.SecureRandom
   | FileSystem.FileSystem
   | HttpClient.HttpClient
   | IdAllocator.IdAllocatorV2
