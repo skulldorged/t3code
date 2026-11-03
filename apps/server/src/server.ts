@@ -201,7 +201,6 @@ import * as ThreadSettlementService from "./orchestration-v2/ThreadSettlementSer
 import * as IdleCompactionService from "./orchestration-v2/IdleCompactionService.ts";
 import * as ThreadPullRequestService from "./orchestration-v2/ThreadPullRequestService.ts";
 import * as RunFinalizationService from "./orchestration-v2/RunFinalizationService.ts";
-import * as EventStoreV2 from "./orchestration-v2/EventStore.ts";
 import * as ProjectionMaintenance from "./orchestration-v2/ProjectionMaintenance.ts";
 import * as ProjectionStoreV2 from "./orchestration-v2/ProjectionStore.ts";
 import * as RuntimePolicy from "./orchestration-v2/RuntimePolicy.ts";
@@ -634,12 +633,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   layerThreadSettlementWorker,
   layerIdleCompactionWorker,
   StorageCleanup.layer.pipe(Layer.provide(ProjectionStoreV2.layer)),
-  DatabaseStorage.layer.pipe(
-    Layer.provide(ProjectionMaintenance.layer),
-    Layer.provide(
-      Layer.merge(EventStoreV2.layerFromOrchestrationEventStore, ProjectionStoreV2.layer),
-    ),
-  ),
+  DatabaseStorage.layer.pipe(Layer.provide(ProjectionMaintenance.layer)),
   layerThreadPullRequestWorker,
   DelegatedTaskAnalytics.layer,
   Layer.effectDiscard(
