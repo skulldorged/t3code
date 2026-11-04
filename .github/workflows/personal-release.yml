@@ -24,7 +24,7 @@ on:
         default: false
         type: boolean
       ios_runner:
-        description: "Where the iOS app builds: canis, or GitHub's macOS runner if canis is down"
+        description: "Where the iOS app and macOS arm64 CLI build: canis, or GitHub's macOS runner if canis is down"
         required: false
         default: canis-ios
         type: choice
@@ -201,7 +201,7 @@ jobs:
           - label: macOS arm64
             platform: mac
             arch: arm64
-            runner: canis-ios
+            runner: ${{ inputs.ios_runner || 'canis-ios' }}
             rust_target: aarch64-apple-darwin
             resource_key: darwin-arm64
             cli_archive: true
