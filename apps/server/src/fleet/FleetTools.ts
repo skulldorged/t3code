@@ -8,7 +8,6 @@ import * as NodeFS from "node:fs";
 
 import { setHostToolInstructions } from "@t3tools/provider-core/server/orchestrationInstructions";
 import * as Context from "effect/Context";
-import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -36,9 +35,10 @@ export interface FleetToolResult {
   readonly content: ReadonlyArray<FleetToolContent>;
 }
 
-export class FleetToolCallError extends Data.TaggedError("FleetToolCallError")<{
-  readonly message: string;
-}> {}
+export class FleetToolCallError extends Schema.TaggedError<FleetToolCallError>()(
+  "FleetToolCallError",
+  { message: Schema.String },
+) {}
 
 const Catalog = Schema.Struct({
   version: Schema.Number,

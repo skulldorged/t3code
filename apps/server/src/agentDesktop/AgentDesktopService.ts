@@ -25,7 +25,6 @@ import type {
   ThreadId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
-import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -33,6 +32,7 @@ import * as Layer from "effect/Layer";
 import * as PubSub from "effect/PubSub";
 import * as Queue from "effect/Queue";
 import * as Schedule from "effect/Schedule";
+import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 
@@ -66,13 +66,15 @@ export interface AgentDesktopHandBack {
   readonly threadIds: ReadonlyArray<ThreadId>;
 }
 
-export class AgentDesktopNotRegisteredError extends Data.TaggedError(
+export class AgentDesktopNotRegisteredError extends Schema.TaggedError<AgentDesktopNotRegisteredError>()(
   "AgentDesktopNotRegisteredError",
-)<{ readonly message: string }> {}
+  { message: Schema.String },
+) {}
 
-export class AgentDesktopNoVncError extends Data.TaggedError("AgentDesktopNoVncError")<{
-  readonly message: string;
-}> {}
+export class AgentDesktopNoVncError extends Schema.TaggedError<AgentDesktopNoVncError>()(
+  "AgentDesktopNoVncError",
+  { message: Schema.String },
+) {}
 
 export class AgentDesktopService extends Context.Service<
   AgentDesktopService,

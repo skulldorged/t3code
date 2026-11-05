@@ -18,34 +18,47 @@ export const RICH_TEXT_DELIMITERS: Record<RichTextMark, string> = {
   code: "`",
 };
 
+/** A run of `text` from `start` to `end` that parses with `marks`. */
+interface SourcePiece {
+  start: number;
+  end: number;
+  marks: RichTextMark[];
+  delimiters?: RichTextDelimiters;
+}
+
 function sameDelimiters(left: RichTextDelimiters = {}, right: RichTextDelimiters = {}): boolean {
   return left.bold === right.bold && left.italic === right.italic;
 }
 
-function pushSpan(
-  spans: RichTextSpan[],
-  text: string,
-  marks: RichTextMark[],
-  delimiters?: RichTextDelimiters,
-): void {
-  if (!text) return;
-  const last = spans[spans.length - 1];
-  if (
-    last &&
-    last.marks.length === marks.length &&
-    last.marks.every((mark, index) => mark === marks[index]) &&
-    sameDelimiters(last.delimiters, delimiters)
-  ) {
-    last.text += text;
-  } else {
-    spans.push(delimiters ? { text, marks, delimiters } : { text, marks });
-  }
+function sameMarks(left: readonly RichTextMark[], right: readonly RichTextMark[]): boolean {
+  return left.length === right.length && left.every((mark, index) => mark === right[index]);
 }
 
-export function parseInlineMarkdown(text: string): RichTextSpan[] {
-  const root: RichTextSpan[] = [];
-  const stack: { delimiter: string; mark: RichTextMark; spans: RichTextSpan[] }[] = [];
-  const current = () => stack.at(-1)?.spans ?? root;
+// Pieces keep source offsets, so callers can map parsed text back onto the
+// characters it came from; parsing only drops delimiters.
+function parseInlineMarkdownPieces(text: string): SourcePiece[] {
+  const root: SourcePiece[] = [];
+  const stack: { delimiter: string; mark: RichTextMark; start: number; pieces: SourcePiece[] }[] =
+    [];
+  const push = (
+    start: number,
+    end: number,
+    marks: RichTextMark[] = [],
+    delimiters?: RichTextDelimiters,
+  ) => {
+    if (end <= start) return;
+    const pieces = stack.at(-1)?.pieces ?? root;
+    const last = pieces.at(-1);
+    if (
+      last?.end === start &&
+      sameMarks(last.marks, marks) &&
+      sameDelimiters(last.delimiters, delimiters)
+    ) {
+      last.end = end;
+    } else {
+      pieces.push(delimiters ? { start, end, marks, delimiters } : { start, end, marks });
+    }
+  };
   const links = findComposerAutolinks(text);
   let linkIndex = 0;
   let index = 0;
@@ -55,14 +68,14 @@ export function parseInlineMarkdown(text: string): RichTextSpan[] {
     while (linkIndex < links.length && links[linkIndex]!.from < index) linkIndex += 1;
     const link = links[linkIndex];
     if (link?.from === index) {
-      pushSpan(current(), text.slice(link.from, link.to), []);
+      push(link.from, link.to);
       index = link.to;
       linkIndex += 1;
       continue;
     }
     const char = text[index]!;
     if (char === "\\") {
-      pushSpan(current(), text.slice(index, index + 2), []);
+      push(index, Math.min(index + 2, text.length));
       index += 2;
       continue;
     }
@@ -75,16 +88,16 @@ export function parseInlineMarkdown(text: string): RichTextSpan[] {
         !text.slice(index, close).includes("\n") &&
         text[close + 1] !== "`"
       ) {
-        pushSpan(current(), text.slice(index + 1, close), ["code"]);
+        push(index + 1, close, ["code"]);
         index = close + 1;
       } else {
-        pushSpan(current(), run, []);
+        push(index, index + run.length);
         index += run.length;
       }
       continue;
     }
     if (char !== "*" && char !== "_" && char !== "~") {
-      pushSpan(current(), char, []);
+      push(index, index + 1);
       index += 1;
       continue;
     }
@@ -115,10 +128,10 @@ export function parseInlineMarkdown(text: string): RichTextSpan[] {
           top.delimiter === RICH_TEXT_DELIMITERS[top.mark]
             ? undefined
             : { [top.mark]: top.delimiter };
-        for (const span of top.spans) {
+        for (const piece of top.pieces) {
           const delimiters =
-            outer || span.delimiters ? { ...span.delimiters, ...outer } : undefined;
-          pushSpan(current(), span.text, [top.mark, ...span.marks], delimiters);
+            outer || piece.delimiters ? { ...piece.delimiters, ...outer } : undefined;
+          push(piece.start, piece.end, [top.mark, ...piece.marks], delimiters);
         }
         index += top.delimiter.length;
       } else if (canOpen && (char !== "~" || end - index >= 2)) {
@@ -126,26 +139,51 @@ export function parseInlineMarkdown(text: string): RichTextSpan[] {
         const mark = char === "~" ? "strike" : length === 2 ? "bold" : "italic";
         // Prevent self-nesting, including alternate delimiters, to bound the stack by supported styles.
         if (stack.some((frame) => frame.mark === mark)) {
-          pushSpan(current(), text.slice(index, end), []);
+          push(index, end);
           index = end;
           continue;
         }
-        stack.push({
-          delimiter: char.repeat(length),
-          mark,
-          spans: [],
-        });
+        stack.push({ delimiter: char.repeat(length), mark, start: index, pieces: [] });
         index += length;
       } else {
-        pushSpan(current(), text.slice(index, end), []);
+        push(index, end);
         index = end;
       }
     }
   }
   while (stack.length > 0) {
     const frame = stack.pop()!;
-    pushSpan(current(), frame.delimiter, []);
-    for (const span of frame.spans) pushSpan(current(), span.text, span.marks, span.delimiters);
+    push(frame.start, frame.start + frame.delimiter.length);
+    for (const piece of frame.pieces) push(piece.start, piece.end, piece.marks, piece.delimiters);
   }
   return root;
+}
+
+export function parseInlineMarkdown(text: string): RichTextSpan[] {
+  const spans: RichTextSpan[] = [];
+  for (const { start, end, marks, delimiters } of parseInlineMarkdownPieces(text)) {
+    const last = spans.at(-1);
+    if (last && sameMarks(last.marks, marks) && sameDelimiters(last.delimiters, delimiters)) {
+      last.text += text.slice(start, end);
+    } else {
+      spans.push(
+        delimiters
+          ? { text: text.slice(start, end), marks, delimiters }
+          : { text: text.slice(start, end), marks },
+      );
+    }
+  }
+  return spans;
+}
+
+/** Marks text the composer shows as editable Markdown source while the caret is in it. */
+export const MARKDOWN_SOURCE_MARK = "markdownSource";
+
+/** Marks for each UTF-16 unit of `text`, or null for a delimiter that parsing drops. */
+export function inlineMarkdownUnitMarks(text: string): Array<RichTextMark[] | null> {
+  const result: Array<RichTextMark[] | null> = Array.from({ length: text.length }, () => null);
+  for (const { start, end, marks } of parseInlineMarkdownPieces(text)) {
+    result.fill(marks, start, end);
+  }
+  return result;
 }
