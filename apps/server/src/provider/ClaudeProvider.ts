@@ -2,6 +2,7 @@ import {
   type ClaudeSettings,
   type ModelCapabilities,
   type ServerProvider,
+  type ServerProviderModel,
   type ServerProviderSlashCommand,
   type ServerProviderResetCredits,
 } from "@t3tools/contracts";
@@ -55,11 +56,25 @@ import {
   resolveClaudeModelsForVersion,
   resolveClaudeUpdateRequiredModels,
   resolveUngatedClaudeModels,
+  withUltracodeToggle,
 } from "./ClaudeModelCatalog.ts";
 
 const DEFAULT_CLAUDE_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabilities({
   optionDescriptors: [],
 });
+
+function claudeProviderModels(
+  builtInModels: ReadonlyArray<ServerProviderModel>,
+  customModels: ClaudeSettings["customModels"],
+): ReadonlyArray<ServerProviderModel> {
+  return providerModelsFromSettings(
+    builtInModels,
+    customModels,
+    DEFAULT_CLAUDE_MODEL_CAPABILITIES,
+  ).map((model) =>
+    model.isCustom ? { ...model, capabilities: withUltracodeToggle(model.capabilities) } : model,
+  );
+}
 
 const CLAUDE_PRESENTATION = {
   displayName: "Claude",
@@ -514,10 +529,9 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
 > {
   const resolvedEnvironment = environment ?? process.env;
   const checkedAt = DateTime.formatIso(yield* DateTime.now);
-  const allModels = providerModelsFromSettings(
+  const allModels = claudeProviderModels(
     resolveUngatedClaudeModels(modelCatalog),
     claudeSettings.customModels,
-    DEFAULT_CLAUDE_MODEL_CAPABILITIES,
   );
 
   if (!claudeSettings.enabled) {
@@ -615,7 +629,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
     probeResult && Result.isSuccess(probeResult) ? probeResult.success : undefined;
   const probeFailure =
     probeResult && Result.isFailure(probeResult) ? probeResult.failure : undefined;
-  const models = providerModelsFromSettings(
+  const models = claudeProviderModels(
     [
       // Account-gated catalog entries (Mythos) appear only when the CLI reports them for the account.
       ...resolveClaudeModelsForVersion(
@@ -628,7 +642,6 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
       ...claudeReportedModels(modelCatalog, claudeSettings.customModels, capabilities?.models),
     ],
     claudeSettings.customModels,
-    DEFAULT_CLAUDE_MODEL_CAPABILITIES,
   );
   const skills = yield* discoverClaudeSkills(claudeSettings, cwd, resolvedEnvironment);
   const slashCommands = [COMPACT_SLASH_COMMAND, ...(capabilities?.slashCommands ?? [])];
@@ -745,10 +758,9 @@ export const makePendingClaudeProvider = Effect.fn("ClaudeProvider.makePendingCl
     modelCatalog: ClaudeModelCatalog = BUNDLED_CLAUDE_MODEL_CATALOG,
   ): Effect.fn.Return<ServerProviderDraft> {
     const checkedAt = yield* nowIso;
-    const models = providerModelsFromSettings(
+    const models = claudeProviderModels(
       resolveUngatedClaudeModels(modelCatalog),
       claudeSettings.customModels,
-      DEFAULT_CLAUDE_MODEL_CAPABILITIES,
     );
 
     if (!claudeSettings.enabled) {
