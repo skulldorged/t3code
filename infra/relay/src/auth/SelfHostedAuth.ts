@@ -85,7 +85,7 @@ export class SelfHostedAuth extends Context.Service<
 export class LegacyTokenVerifier extends Context.Service<
   LegacyTokenVerifier,
   { readonly verify: (token: string) => Effect.Effect<{ sub: string }, SelfHostedAuthUnavailable> }
->()("t3code-relay/auth/LegacyTokenVerifier") {}
+>()("t3code-relay/auth/SelfHostedAuth/LegacyTokenVerifier") {}
 
 export const layer = Layer.effect(
   SelfHostedAuth,

@@ -412,13 +412,14 @@ export const layer = Api.make(
               Effect.gen(function* () {
                 const config = yield* RelayConfiguration.RelayConfiguration;
                 return {
-                  verify: (token: string) =>
+                  verify: Effect.fn("SelfHostedAuth.LegacyTokenVerifier.verify")((token: string) =>
                     RelayHttpApi.verifyRelayClientBearerToken(config, token).pipe(
                       Effect.timeout("10 seconds"),
                       Effect.mapError(
                         (cause) => new SelfHostedAuth.SelfHostedAuthUnavailable({ cause }),
                       ),
                     ),
+                  ),
                 };
               }),
             ),
