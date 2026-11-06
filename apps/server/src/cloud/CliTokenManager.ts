@@ -33,6 +33,7 @@ import * as ExternalLauncher from "../process/externalLauncher.ts";
 import {
   cloudCliOAuthConfig,
   hostedAppUrlConfig,
+  makeCloudCliOAuthConfig,
   type CloudCliOAuthConfig,
   selfHostedConnectAuth,
 } from "./publicConfig.ts";
@@ -487,7 +488,7 @@ export const make = Effect.gen(function* () {
     const metadata = yield* cloudCliOAuthConfig;
     const encoded = yield* encodePersistedToken({
       ...token,
-      tokenEndpoint: metadata.tokenEndpoint,
+      tokenEndpoint: token.tokenEndpoint ?? metadata.tokenEndpoint,
     });
     yield* secrets.set(CLOUD_CLI_OAUTH_TOKEN_SECRET, stringToBytes(encoded));
     return token;
@@ -502,11 +503,16 @@ export const make = Effect.gen(function* () {
     if (Option.isNone(encoded)) return Option.none<PersistedToken>();
     const token = yield* decodePersistedToken(bytesToString(encoded.value));
     const metadata = yield* cloudCliOAuthConfig;
-    if (
-      (selfHostedConnectAuth && token.tokenEndpoint === undefined) ||
-      (token.tokenEndpoint !== undefined && token.tokenEndpoint !== metadata.tokenEndpoint)
-    ) {
-      return Option.none<PersistedToken>();
+    if (token.tokenEndpoint !== metadata.tokenEndpoint) {
+      if (!selfHostedConnectAuth) {
+        return token.tokenEndpoint === undefined
+          ? Option.some(token)
+          : Option.none<PersistedToken>();
+      }
+      const legacy = yield* makeCloudCliOAuthConfig({ useSelfHostedAuth: false });
+      if (token.tokenEndpoint !== undefined && token.tokenEndpoint !== legacy.tokenEndpoint) {
+        return Option.none<PersistedToken>();
+      }
     }
     return Option.some(token);
   });
@@ -593,6 +599,39 @@ export const make = Effect.gen(function* () {
     const token = yield* read();
     if (Option.isNone(token)) return token;
     const now = yield* Clock.currentTimeMillis;
+    const metadata = yield* cloudCliOAuthConfig;
+    if (selfHostedConnectAuth && token.value.tokenEndpoint !== metadata.tokenEndpoint) {
+      const legacy = yield* makeCloudCliOAuthConfig({ useSelfHostedAuth: false });
+      return yield* Effect.gen(function* () {
+        let current = token.value;
+        if (current.expiresAtEpochMs - CLOUD_CLI_OAUTH_REFRESH_EARLY_MS <= now) {
+          const refreshed = yield* exchangeToken(legacy, {
+            grant_type: "refresh_token",
+            refresh_token: current.refreshToken,
+            client_id: legacy.clientId,
+          });
+          // Persist rotated legacy credentials before the relay exchange can fail.
+          current = yield* persist({
+            ...current,
+            ...refreshed.token,
+            tokenEndpoint: legacy.tokenEndpoint,
+          });
+        }
+        const migrated = yield* exchangeToken(metadata, {
+          grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+          subject_token_type: "urn:ietf:params:oauth:token-type:access_token",
+          subject_token: current.accessToken,
+          client_id: metadata.clientId,
+        });
+        return Option.some(
+          yield* persist({
+            ...migrated.token,
+            ...(current.identity === undefined ? {} : { identity: current.identity }),
+            tokenEndpoint: metadata.tokenEndpoint,
+          }),
+        );
+      }).pipe(Effect.uninterruptible);
+    }
     if (token.value.expiresAtEpochMs - CLOUD_CLI_OAUTH_REFRESH_EARLY_MS > now) {
       return token;
     }

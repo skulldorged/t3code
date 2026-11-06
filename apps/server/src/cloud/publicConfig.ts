@@ -168,11 +168,13 @@ export interface CloudCliOAuthConfig {
 export function makeCloudCliOAuthConfig({
   clerkPublishableKeyFallback = buildTimeClerkPublishableKey,
   clerkCliOAuthClientIdFallback = buildTimeClerkCliOAuthClientId,
+  useSelfHostedAuth = selfHostedConnectAuth,
 }: {
   readonly clerkPublishableKeyFallback?: string;
   readonly clerkCliOAuthClientIdFallback?: string;
+  readonly useSelfHostedAuth?: boolean;
 } = {}) {
-  if (selfHostedConnectAuth) {
+  if (useSelfHostedAuth) {
     return relayUrlConfig.pipe(
       Config.map((relayUrl) => ({
         tokenEndpoint: `${relayUrl}/auth/token`,

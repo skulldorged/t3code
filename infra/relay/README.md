@@ -100,6 +100,9 @@ Apply the Postgres migrations before deploying. Device sessions renew for
 minutes. Browsers keep refresh credentials in an HttpOnly cookie, desktop uses
 OS-encrypted storage, and mobile uses SecureStore. Account controls list and
 revoke device sessions. Clerk remains available to older clients during migration.
+The CLI exchanges existing Clerk credentials for renewable self-hosted sessions
+on first use, preserving headless environment links across the update. Keep the
+Clerk configuration available until those installations have migrated.
 
 The relay deploys with the Alchemy CLI (`vp run --filter t3code-relay deploy` is `alchemy deploy`
 in this directory):

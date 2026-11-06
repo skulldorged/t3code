@@ -407,6 +407,23 @@ export const layer = Api.make(
       Layer.provideMerge(
         SelfHostedAuth.layer.pipe(
           Layer.provide(
+            Layer.effect(
+              SelfHostedAuth.LegacyTokenVerifier,
+              Effect.gen(function* () {
+                const config = yield* RelayConfiguration.RelayConfiguration;
+                return {
+                  verify: (token: string) =>
+                    RelayHttpApi.verifyRelayClientBearerToken(config, token).pipe(
+                      Effect.timeout("10 seconds"),
+                      Effect.mapError(
+                        (cause) => new SelfHostedAuth.SelfHostedAuthUnavailable({ cause }),
+                      ),
+                    ),
+                };
+              }),
+            ),
+          ),
+          Layer.provide(
             Layer.succeed(SelfHostedAuth.AuthRateLimiter, {
               allow: Effect.fn("SelfHostedAuth.AuthRateLimiter.allow")((key: string) =>
                 hookRateLimit.limit({ key }).pipe(

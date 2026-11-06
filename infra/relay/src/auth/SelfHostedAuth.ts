@@ -82,12 +82,18 @@ export class SelfHostedAuth extends Context.Service<
   }
 >()("t3code-relay/auth/SelfHostedAuth") {}
 
+export class LegacyTokenVerifier extends Context.Service<
+  LegacyTokenVerifier,
+  { readonly verify: (token: string) => Effect.Effect<{ sub: string }, SelfHostedAuthUnavailable> }
+>()("t3code-relay/auth/LegacyTokenVerifier") {}
+
 export const layer = Layer.effect(
   SelfHostedAuth,
   Effect.gen(function* () {
     const config = yield* RelayConfiguration.RelayConfiguration;
     const db = yield* RelayDb.RelayDb;
     const limiter = yield* AuthRateLimiter;
+    const legacyTokens = yield* LegacyTokenVerifier;
     const settings = config.selfHostedAuth;
     const context = yield* Effect.context<never>();
     const run = Effect.runPromiseWith(context);
@@ -507,6 +513,41 @@ export const layer = Layer.effect(
             : await run(request.json);
           if (!raw || typeof raw !== "object" || Array.isArray(raw)) return reject();
           const body = raw as Record<string, unknown>;
+          if (
+            url.pathname === "/auth/token" &&
+            body.grant_type === "urn:ietf:params:oauth:grant-type:token-exchange"
+          ) {
+            if (
+              body.client_id !== "t3-connect-cli" ||
+              body.subject_token_type !== "urn:ietf:params:oauth:token-type:access_token"
+            )
+              return reject();
+            const token = bodyString(body, "subject_token");
+            if (!token || token.startsWith("t3s_")) return reject();
+            const address = request.headers["cf-connecting-ip"] ?? "unknown";
+            if (!(await run(limiter.allow("auth-migrate:" + (await digest(address)))))) {
+              return HttpServerResponse.jsonUnsafe(
+                { error: "slow_down" },
+                {
+                  status: 429,
+                  headers: { "retry-after": "60" },
+                },
+              );
+            }
+            const principal = await run(legacyTokens.verify(token));
+            if (principal.sub !== settings.accountId) return reject();
+            return sessionResponse(
+              {
+                userId: principal.sub,
+                sessionId: await run(secureRandom.uuidV4()),
+                createdAt: now(),
+                cookie: false,
+                label: "T3 Code CLI",
+              },
+              undefined,
+              true,
+            );
+          }
           if (url.pathname === "/auth/device_authorization") {
             const deviceCode = random("t3d_");
             const userCode = (await run(secureRandom.uuidV4()))
