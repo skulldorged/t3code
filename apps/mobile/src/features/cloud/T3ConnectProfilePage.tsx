@@ -42,7 +42,9 @@ function confirmDeregister(environment: RelayClientEnvironmentRecord, onConfirm:
   Dialog.confirm({ title, message, confirmText: "Deregister", destructive: true, onConfirm });
 }
 
-export function T3ConnectProfilePage() {
+export function T3ConnectProfilePage(
+  props: { readonly header?: ReactNode; readonly footer?: ReactNode } = {},
+) {
   const environmentsState = useManagedRelayEnvironments();
   const deregisterEnvironment = useAtomCommand(deregisterManagedRelayEnvironmentCommand, {
     reportFailure: false,
@@ -132,6 +134,7 @@ export function T3ConnectProfilePage() {
         />
       }
     >
+      {props.header}
       <ClerkSectionHeader>Registered servers</ClerkSectionHeader>
 
       {environmentsState.error ? (
@@ -204,6 +207,7 @@ export function T3ConnectProfilePage() {
       <Text className="px-6 pt-6 text-xs leading-normal text-clerk-foreground-muted">
         Connections on this device are managed in Settings.
       </Text>
+      {props.footer}
     </ScrollView>
   );
 }

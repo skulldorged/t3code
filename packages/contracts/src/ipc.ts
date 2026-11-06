@@ -1062,7 +1062,16 @@ export const DesktopShellThreadsSchema = Schema.Struct({
 });
 export type DesktopShellThreads = typeof DesktopShellThreadsSchema.Type;
 
+export interface SelfHostedConnectSession {
+  readonly account: { readonly id: string; readonly email?: string };
+  readonly accessToken: string;
+  readonly expiresAt: string;
+}
+
 export interface DesktopBridge {
+  signInSelfHostedConnect: (relayUrl: string) => Promise<SelfHostedConnectSession>;
+  refreshSelfHostedConnect: (relayUrl: string) => Promise<SelfHostedConnectSession | null>;
+  signOutSelfHostedConnect: (relayUrl: string) => Promise<void>;
   getAppBranding: () => DesktopAppBranding | null;
   getRelayTelemetryEnabled: () => boolean;
   getPathForFile: (file: File) => string;

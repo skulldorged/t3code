@@ -1,4 +1,5 @@
 import type { getClerkInstance } from "@clerk/expo";
+import { selfHostedAuth } from "./selfHostedAuth";
 import { createCloudAccountService, ManagedRelay } from "@t3tools/client-runtime/relay";
 import {
   reportAtomCommandResult,
@@ -28,7 +29,9 @@ import { clearConnectOnboardingRequest, requestConnectOnboarding } from "./conne
 import { managedRelaySessionOwnership } from "./managedRelaySessionOwnership";
 import { resolveRelayClerkTokenOptions } from "./publicConfig";
 
-type ClerkInstance = ReturnType<typeof getClerkInstance>;
+type ClerkInstance =
+  | Pick<ReturnType<typeof getClerkInstance>, "addListener" | "session">
+  | typeof selfHostedAuth;
 
 export function deactivateCloudRelayAccount(): void {
   setAgentAwarenessRelayTokenProvider(null);

@@ -670,7 +670,7 @@ export class RelayEnvironmentPrincipal extends Context.Service<
 const RelayClientBearerAuthorization = HttpApiSecurity.http({ scheme: "bearer" }).pipe(
   HttpApiSecurity.annotate(
     OpenApi.Description,
-    "Clerk session or OAuth bearer token for the signed-in T3 Connect user.",
+    "Session or OAuth bearer token for the signed-in T3 Connect user.",
   ),
 );
 
@@ -678,7 +678,7 @@ export class RelayClientAuth extends HttpApiMiddleware.Service<
   RelayClientAuth,
   { provides: RelayClientPrincipal }
 >()("RelayClientAuth", {
-  error: RelayAuthInvalidError,
+  error: [RelayAuthInvalidError, RelayInternalError],
   security: { clientBearer: RelayClientBearerAuthorization },
 }) {}
 

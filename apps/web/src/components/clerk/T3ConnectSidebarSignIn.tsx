@@ -1,4 +1,7 @@
-import { UserButton, useAuth } from "@clerk/react";
+import { isSelfHostedConnect } from "../../cloud/selfHostedAuth";
+import { openSelfHostedAccount } from "../../cloud/SelfHostedAuthShell";
+import { UserButton } from "@clerk/react";
+import { useAuth } from "../../cloud/auth";
 import { LogInIcon } from "lucide-react";
 
 import { hasCloudPublicConfig } from "../../cloud/publicConfig";
@@ -15,7 +18,7 @@ export function T3ConnectSidebarSignIn() {
 export function T3ConnectSidebarAvatar() {
   if (!hasCloudPublicConfig()) return null;
 
-  return <ConfiguredT3ConnectSidebarAvatar />;
+  return isSelfHostedConnect() ? <SelfHostedAvatar /> : <ConfiguredT3ConnectSidebarAvatar />;
 }
 
 function ConfiguredT3ConnectSidebarAvatar() {
@@ -62,5 +65,15 @@ function ConfiguredT3ConnectSidebarSignIn() {
         </SidebarMenuButton>
       </SidebarMenuItem>
     </SidebarMenu>
+  );
+}
+
+function SelfHostedAvatar() {
+  const { isLoaded, isSignedIn } = useAuth();
+  if (!isLoaded || !isSignedIn) return null;
+  return (
+    <button type="button" aria-label="T3 Connect account" onClick={() => openSelfHostedAccount()}>
+      Account
+    </button>
   );
 }

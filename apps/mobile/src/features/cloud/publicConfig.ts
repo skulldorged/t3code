@@ -21,6 +21,7 @@ export interface CloudPublicConfig {
   };
   readonly relay: {
     readonly url: string | null;
+    readonly authMode?: "clerk" | "self-hosted";
   };
   readonly observability: {
     readonly tracesUrl: string | null;
@@ -64,6 +65,7 @@ export function resolveCloudPublicConfig(extra: ExpoExtra = Constants.expoConfig
     },
     relay: {
       url: normalizeSecureRelayUrl(trimNonEmpty(extra?.relay?.url) ?? ""),
+      authMode: extra?.relay?.authMode === "self-hosted" ? "self-hosted" : "clerk",
     },
     observability: {
       tracesUrl: normalizeSecureUrl(extra?.observability?.tracesUrl),
@@ -75,7 +77,11 @@ export function resolveCloudPublicConfig(extra: ExpoExtra = Constants.expoConfig
 
 export function hasCloudPublicConfig(): boolean {
   const config = resolveCloudPublicConfig();
-  return Boolean(config.clerk.publishableKey && config.clerk.jwtTemplate && config.relay.url);
+  return Boolean(
+    config.relay.url &&
+    (config.relay.authMode === "self-hosted" ||
+      (config.clerk.publishableKey && config.clerk.jwtTemplate)),
+  );
 }
 
 type Configured<T> = {
@@ -97,7 +103,9 @@ export function hasTracingPublicConfig(
 }
 
 export function resolveRelayClerkTokenOptions() {
-  const { jwtTemplate } = resolveCloudPublicConfig().clerk;
+  const config = resolveCloudPublicConfig();
+  if (config.relay.authMode === "self-hosted") return undefined;
+  const { jwtTemplate } = config.clerk;
   if (!jwtTemplate) {
     throw new CloudPublicConfigMissingError({ key: "T3CODE_CLERK_JWT_TEMPLATE" });
   }

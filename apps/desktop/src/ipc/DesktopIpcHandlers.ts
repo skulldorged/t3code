@@ -1,3 +1,8 @@
+import {
+  selfHostedConnectSignIn,
+  selfHostedConnectRefresh,
+  selfHostedConnectSignOut,
+} from "./methods/selfHostedConnect.ts";
 import * as Effect from "effect/Effect";
 
 import { receiveProviderAuthCallback, cancelProviderAuthCallback } from "./methods/providerAuth.ts";
@@ -91,6 +96,9 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(AppActivationIpc.complete);
   yield* ipc.handle(WebLinksIpc.setReady);
 
+  yield* ipc.handle(selfHostedConnectSignIn);
+  yield* ipc.handle(selfHostedConnectRefresh);
+  yield* ipc.handle(selfHostedConnectSignOut);
   yield* ipc.handleSync(takeLegacyLocalStorage);
   yield* ipc.handle(completeLegacyLocalStorage);
   yield* ipc.handleSync(getAppBranding);

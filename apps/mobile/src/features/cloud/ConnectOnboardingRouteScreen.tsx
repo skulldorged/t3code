@@ -2,7 +2,7 @@ import { AppBar } from "../../components/ui/AppBar";
 import { Button } from "../../components/ui/Button";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 
-import { useAuth } from "@clerk/expo";
+import { useAuth } from "./cloudAuth";
 import { useNavigation } from "@react-navigation/native";
 import { useState } from "react";
 import { RefreshControl, View } from "react-native";

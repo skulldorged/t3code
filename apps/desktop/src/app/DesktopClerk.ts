@@ -24,6 +24,7 @@ import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import { openClerkTokenStorage } from "./ClerkTokenStore.ts";
 import * as DesktopWebLinks from "./DesktopWebLinks.ts";
 
+declare const __T3CODE_CONNECT_AUTH_MODE__: string | undefined;
 declare const __T3CODE_BUILD_CLERK_PUBLISHABLE_KEY__: string | undefined;
 
 export class DesktopClerkBridgeInitializationError extends Schema.TaggedError<DesktopClerkBridgeInitializationError>()(
@@ -86,6 +87,11 @@ export const desktopClerkFrontendApiHostname = resolveDesktopClerkFrontendApiHos
 );
 
 function createDesktopClerkBridge(stateDir: string, isDevelopment: boolean, userDataPath: string) {
+  if (
+    typeof __T3CODE_CONNECT_AUTH_MODE__ !== "undefined" &&
+    __T3CODE_CONNECT_AUTH_MODE__ === "self-hosted"
+  )
+    return { cleanup() {} };
   return createClerkBridge({
     storage: openClerkTokenStorage(
       stateDir,

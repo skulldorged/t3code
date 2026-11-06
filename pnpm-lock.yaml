@@ -1405,6 +1405,9 @@ importers:
       effect:
         specifier: 4.1.2
         version: 4.1.2
+      oauth4webapi:
+        specifier: ^3.8.3
+        version: 3.8.8
     devDependencies:
       '@alchemy.run/test':
         specifier: 'catalog:'
@@ -10493,6 +10496,9 @@ packages:
 
   oas-validator@5.0.8:
     resolution: {integrity: sha512-cu20/HE5N5HKqVygs3dt94eYJfBi0TsZvPVXDhbXQHiEityDN+RROTleefoKRKKJ9dFAF2JBkDHgvWj0sjKGmw==}
+
+  oauth4webapi@3.8.8:
+    resolution: {integrity: sha512-8N28E+a/oxfXWBgOMt+ZP/JUf/XR+IFbvkAEPP3gznXOMv9BpAAwiIj0TFNz3tGTPc0ZQ8zmWBNgN1nAys0gng==}
 
   ob1@0.87.1:
     resolution: {integrity: sha512-i8iA8uij0g1YQzS8uOJPSRCgwDjO9warIHUAu1Fqj877Wc3wlfxDYBioYWgKTBF2+URVJttyDWSEpmd99nlvtQ==}
@@ -20635,6 +20641,8 @@ snapshots:
       reftools: 1.1.9
       should: 13.2.3
       yaml: 2.9.0
+
+  oauth4webapi@3.8.8: {}
 
   ob1@0.87.1:
     dependencies:

@@ -1,3 +1,4 @@
+import { selfHostedAuth, selfHostedAuthEnabled } from "./selfHostedAuth";
 import { getClerkInstance } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
 
@@ -59,6 +60,19 @@ export async function bootstrapBackgroundManagedRelayAuth(
   const attemptEpoch = authenticationEpoch;
   try {
     const config = dependencies.resolveConfig();
+    if (selfHostedAuthEnabled && config.relay.url) {
+      await selfHostedAuth.load();
+      const session = selfHostedAuth.session;
+      if (!session) return { state: { status: "signed-out" } };
+      if (attemptEpoch !== authenticationEpoch) return { state: { status: "superseded" } };
+      const release = dependencies.acquireSession({
+        accountId: session.user.id,
+        readClerkToken: session.getToken,
+      });
+      return release
+        ? { state: { status: "active", accountId: session.user.id }, release }
+        : { state: { status: "superseded" } };
+    }
     if (!config.clerk.publishableKey || !config.clerk.jwtTemplate || !config.relay.url) {
       return { state: { status: "unconfigured" } };
     }

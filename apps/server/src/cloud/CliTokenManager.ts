@@ -34,6 +34,7 @@ import {
   cloudCliOAuthConfig,
   hostedAppUrlConfig,
   type CloudCliOAuthConfig,
+  selfHostedConnectAuth,
 } from "./publicConfig.ts";
 import { renderLoopbackAuthorizationCompleteHtml } from "./cliAuthHtml.ts";
 
@@ -122,6 +123,7 @@ const waitForLoopbackAuthorization = Effect.fn("cloud.cli_token.wait_for_loopbac
 );
 
 const PersistedToken = Schema.Struct({
+  tokenEndpoint: Schema.optional(Schema.String),
   accessToken: Schema.String,
   refreshToken: Schema.String,
   expiresAtEpochMs: Schema.Number,
@@ -482,7 +484,11 @@ export const make = Effect.gen(function* () {
   const externalLauncher = yield* ExternalLauncher.ExternalLauncher;
   const semaphore = yield* Semaphore.make(1);
   const persist = Effect.fn("cloud.cli_token.persist")(function* (token: PersistedToken) {
-    const encoded = yield* encodePersistedToken(token);
+    const metadata = yield* cloudCliOAuthConfig;
+    const encoded = yield* encodePersistedToken({
+      ...token,
+      tokenEndpoint: metadata.tokenEndpoint,
+    });
     yield* secrets.set(CLOUD_CLI_OAUTH_TOKEN_SECRET, stringToBytes(encoded));
     return token;
   });
@@ -494,7 +500,15 @@ export const make = Effect.gen(function* () {
   const read = Effect.fn("cloud.cli_token.read")(function* () {
     const encoded = yield* secrets.get(CLOUD_CLI_OAUTH_TOKEN_SECRET);
     if (Option.isNone(encoded)) return Option.none<PersistedToken>();
-    return Option.some(yield* decodePersistedToken(bytesToString(encoded.value)));
+    const token = yield* decodePersistedToken(bytesToString(encoded.value));
+    const metadata = yield* cloudCliOAuthConfig;
+    if (
+      (selfHostedConnectAuth && token.tokenEndpoint === undefined) ||
+      (token.tokenEndpoint !== undefined && token.tokenEndpoint !== metadata.tokenEndpoint)
+    ) {
+      return Option.none<PersistedToken>();
+    }
+    return Option.some(token);
   });
 
   const refresh = Effect.fn("cloud.cli_token.refresh")(function* (token: PersistedToken) {

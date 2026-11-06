@@ -13,6 +13,7 @@ import * as Schema from "effect/Schema";
 import * as SchemaIssue from "effect/SchemaIssue";
 
 declare const __T3CODE_BUILD_RELAY_URL__: string | undefined;
+declare const __T3CODE_BUILD_CONNECT_AUTH_MODE__: string | undefined;
 declare const __T3CODE_BUILD_CLERK_PUBLISHABLE_KEY__: string | undefined;
 declare const __T3CODE_BUILD_CLERK_CLI_OAUTH_CLIENT_ID__: string | undefined;
 declare const __T3CODE_BUILD_RELAY_CLIENT_OTLP_TRACES_URL__: string | undefined;
@@ -21,6 +22,12 @@ declare const __T3CODE_BUILD_RELAY_CLIENT_OTLP_TRACES_TOKEN__: string | undefine
 
 const CLOUD_CLI_OAUTH_LOOPBACK_PORT = 34338;
 const CLOUD_CLI_OAUTH_SCOPES = CONNECT_OAUTH_SCOPES;
+
+export const selfHostedConnectAuth =
+  (process.env.T3CODE_CONNECT_AUTH_MODE?.trim() ||
+    (typeof __T3CODE_BUILD_CONNECT_AUTH_MODE__ === "undefined"
+      ? ""
+      : __T3CODE_BUILD_CONNECT_AUTH_MODE__)) === "self-hosted";
 
 function validateRelayUrl(value: string) {
   const relayUrl = normalizeSecureRelayUrl(value);
@@ -165,6 +172,18 @@ export function makeCloudCliOAuthConfig({
   readonly clerkPublishableKeyFallback?: string;
   readonly clerkCliOAuthClientIdFallback?: string;
 } = {}) {
+  if (selfHostedConnectAuth) {
+    return relayUrlConfig.pipe(
+      Config.map((relayUrl) => ({
+        tokenEndpoint: `${relayUrl}/auth/token`,
+        deviceAuthorizationEndpoint: `${relayUrl}/auth/device_authorization`,
+        clientId: "t3-connect-cli",
+        loopbackPort: CLOUD_CLI_OAUTH_LOOPBACK_PORT,
+        redirectUri: connectLoopbackRedirectUri(CLOUD_CLI_OAUTH_LOOPBACK_PORT),
+        scopes: CLOUD_CLI_OAUTH_SCOPES,
+      })),
+    );
+  }
   return Config.all({
     clerkPublishableKey: makePublicValueConfig(
       "T3CODE_CLERK_PUBLISHABLE_KEY",
@@ -206,6 +225,7 @@ export const cloudCliOAuthConfig = makeCloudCliOAuthConfig();
 
 export const hasCloudPublicConfig = Boolean(
   (normalizeSecureRelayUrl(process.env.T3CODE_RELAY_URL ?? "") ?? buildTimeRelayUrl) &&
-  (process.env.T3CODE_CLERK_PUBLISHABLE_KEY?.trim() || buildTimeClerkPublishableKey) &&
-  (process.env.T3CODE_CLERK_CLI_OAUTH_CLIENT_ID?.trim() || buildTimeClerkCliOAuthClientId),
+  (selfHostedConnectAuth ||
+    ((process.env.T3CODE_CLERK_PUBLISHABLE_KEY?.trim() || buildTimeClerkPublishableKey) &&
+      (process.env.T3CODE_CLERK_CLI_OAUTH_CLIENT_ID?.trim() || buildTimeClerkCliOAuthClientId))),
 );

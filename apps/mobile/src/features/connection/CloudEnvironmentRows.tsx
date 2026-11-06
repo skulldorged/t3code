@@ -1,7 +1,7 @@
 import { Button } from "../../components/ui/Button";
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import { ConnectionTraceId } from "./ConnectionTraceId";
-import { useAuth } from "@clerk/expo";
+import { useAuth } from "../cloud/cloudAuth";
 import { SymbolView } from "../../components/ui/AppSymbol";
 import {
   hasSavedBearerRoute,

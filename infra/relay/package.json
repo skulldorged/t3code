@@ -27,7 +27,8 @@
     "@t3tools/shared": "workspace:*",
     "alchemy": "catalog:",
     "drizzle-orm": "1.0.0-rc.5",
-    "effect": "catalog:"
+    "effect": "catalog:",
+    "oauth4webapi": "^3.8.3"
   },
   "devDependencies": {
     "@alchemy.run/test": "catalog:",

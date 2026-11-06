@@ -54,10 +54,13 @@ export interface T3ChatSettings {
   readonly linkSecret: Redacted.Redacted<string>;
 }
 
+import type { SelfHostedAuthSettings } from "./auth/SelfHostedAuth.ts";
+
 export class RelayConfiguration extends Context.Service<
   RelayConfiguration,
   {
     readonly relayIssuer: string;
+    readonly selfHostedAuth?: SelfHostedAuthSettings;
     readonly apns: ApnsCredentials | null;
     readonly fcmServiceAccount?: Redacted.Redacted<string>;
     readonly clerkSecretKey: Redacted.Redacted<string>;

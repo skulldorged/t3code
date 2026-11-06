@@ -38,25 +38,27 @@ function clerkTokenReader(clerk: ClerkInstance): () => Promise<string | null> {
     clerk.session ? await clerk.session.getToken(resolveRelayClerkTokenOptions()) : null;
 }
 
+export const cleanUpManagedRelayAccount = async () => {
+  const results = await Promise.all([
+    runAtomCommand(appAtomRegistry, environmentCatalog.removeRelayEnvironments, undefined, {
+      reportFailure: false,
+      reportDefect: false,
+    }),
+    settleAsyncResult(() =>
+      runtime.runPromiseExit(
+        ManagedRelay.ManagedRelayClient.pipe(Effect.flatMap((client) => client.resetTokenCache)),
+      ),
+    ),
+  ]);
+  for (const result of results) {
+    reportAtomCommandResult(result, { label: "cloud account cleanup" });
+  }
+};
+
 const managedRelayAccountService = createCloudAccountService<ClerkInstance>({
   deactivate: deactivateManagedRelayAuthentication,
   detach: deactivateManagedRelayAuthentication,
-  cleanUp: async () => {
-    const results = await Promise.all([
-      runAtomCommand(appAtomRegistry, environmentCatalog.removeRelayEnvironments, undefined, {
-        reportFailure: false,
-        reportDefect: false,
-      }),
-      settleAsyncResult(() =>
-        runtime.runPromiseExit(
-          ManagedRelay.ManagedRelayClient.pipe(Effect.flatMap((client) => client.resetTokenCache)),
-        ),
-      ),
-    ]);
-    for (const result of results) {
-      reportAtomCommandResult(result, { label: "cloud account cleanup" });
-    }
-  },
+  cleanUp: cleanUpManagedRelayAccount,
   activate: ({ source, accountId }) =>
     activateManagedRelayAuthentication(accountId, clerkTokenReader(source)),
 });

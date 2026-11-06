@@ -76,6 +76,31 @@ dependencies represented at their boundary rather than mocking internal behavior
 
 ## Deployment
 
+### Self-hosted sign-in
+
+The fork can use an existing OpenID Connect provider instead of Clerk. Set
+`T3CODE_CONNECT_AUTH_MODE=self-hosted` when building the server, desktop, web,
+and mobile clients, together with `T3CODE_RELAY_URL`.
+
+On the relay, enable `RELAY_SELF_HOSTED_AUTH_ENABLED` and configure
+`RELAY_OIDC_ISSUER`, `RELAY_OIDC_CLIENT_ID`, and optionally
+`RELAY_OIDC_CLIENT_SECRET`. Register the relay's `/auth/callback` URL with the
+identity provider. `RELAY_OIDC_ALLOWED_SUBJECT` selects the provider's exact
+account subject; `RELAY_SELF_HOSTED_ACCOUNT_ID` is the existing Connect account
+ID to retain when migrating. Email is display information, not an identity map.
+
+`RELAY_AUTH_REDIRECT_URIS` is a JSON array of allowed browser and mobile callback
+URLs. Browser callbacks use `/auth/connect/callback` on the hosted app origin;
+mobile callbacks use `connect-auth/callback` with the build's registered scheme.
+Desktop sign-in uses a PKCE-protected loopback callback. Headless CLI sign-in
+uses the relay's device-authorization page.
+
+Apply the Postgres migrations before deploying. Device sessions renew for
+`RELAY_AUTH_SESSION_DAYS` (180 by default); access credentials expire after five
+minutes. Browsers keep refresh credentials in an HttpOnly cookie, desktop uses
+OS-encrypted storage, and mobile uses SecureStore. Account controls list and
+revoke device sessions. Clerk remains available to older clients during migration.
+
 The relay deploys with the Alchemy CLI (`vp run --filter t3code-relay deploy` is `alchemy deploy`
 in this directory):
 

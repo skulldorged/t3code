@@ -477,6 +477,7 @@ const config: ExpoConfig = {
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
     relay: {
       url: repoEnv.T3CODE_RELAY_URL ?? null,
+      authMode: repoEnv.T3CODE_CONNECT_AUTH_MODE === "self-hosted" ? "self-hosted" : "clerk",
     },
     clerk: {
       publishableKey: repoEnv.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? null,

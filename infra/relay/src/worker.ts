@@ -12,6 +12,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as Etag from "effect/http/Etag";
 import * as HttpMiddleware from "effect/http/HttpMiddleware";
@@ -30,6 +31,7 @@ import {
 } from "./http/Api.ts";
 import * as CloudMintSigner from "./auth/CloudMintSigner.ts";
 import * as RelayHttpApi from "./http/Api.ts";
+import * as SelfHostedAuth from "./auth/SelfHostedAuth.ts";
 import { ManagedEndpointZone, RelayApiZone, RelayDeploymentConfig } from "./zone.ts";
 import * as Observability from "./observability.ts";
 import * as DeliveryAttempts from "./agentActivity/DeliveryAttempts.ts";
@@ -164,9 +166,39 @@ export const layer = Api.make(
     const apnsDeliveryQueueSender = yield* Cloudflare.Queues.WriteQueue(apnsDeliveryQueue);
     const fcmDeliveryQueueSender = yield* Cloudflare.Queues.WriteQueue(fcmDeliveryQueue);
 
-    const clerkSecretKey = yield* Config.Redacted("CLERK_SECRET_KEY");
-    const clerkPublishableKey = yield* Config.String("CLERK_PUBLISHABLE_KEY");
-    const clerkJwtAudience = yield* Config.String("CLERK_JWT_AUDIENCE");
+    const selfHostedEnabled = yield* Config.Boolean("RELAY_SELF_HOSTED_AUTH_ENABLED").pipe(
+      Config.withDefault(false),
+    );
+    const selfHostedAuth = selfHostedEnabled
+      ? {
+          issuer: yield* Config.String("RELAY_OIDC_ISSUER"),
+          clientId: yield* Config.String("RELAY_OIDC_CLIENT_ID"),
+          clientSecret: Option.getOrUndefined(
+            yield* Config.option(Config.Redacted("RELAY_OIDC_CLIENT_SECRET")),
+          ),
+          allowedSubject: yield* Config.String("RELAY_OIDC_ALLOWED_SUBJECT"),
+          accountId: yield* Config.String("RELAY_SELF_HOSTED_ACCOUNT_ID"),
+          accountEmail: Option.getOrUndefined(
+            yield* Config.option(Config.String("RELAY_SELF_HOSTED_ACCOUNT_EMAIL")),
+          ),
+          redirectUris: yield* Config.schema(
+            Schema.fromJsonString(Schema.Array(Schema.String)),
+            "RELAY_AUTH_REDIRECT_URIS",
+          ),
+          sessionDays: yield* Config.Number("RELAY_AUTH_SESSION_DAYS").pipe(
+            Config.withDefault(180),
+          ),
+        }
+      : undefined;
+    const clerkSecretKey = yield* Config.Redacted("CLERK_SECRET_KEY").pipe(
+      Config.withDefault(Redacted.make("")),
+    );
+    const clerkPublishableKey = yield* Config.String("CLERK_PUBLISHABLE_KEY").pipe(
+      Config.withDefault(""),
+    );
+    const clerkJwtAudience = yield* Config.String("CLERK_JWT_AUDIENCE").pipe(
+      Config.withDefault("t3-relay"),
+    );
     const t3ChatLinkSecret = Option.getOrUndefined(
       Option.filter(
         yield* Config.option(Config.Redacted("T3CHAT_LINK_SECRET")),
@@ -218,6 +250,7 @@ export const layer = Api.make(
     const loadSettings = Effect.gen(function* () {
       return RelayConfiguration.RelayConfiguration.of({
         relayIssuer: relayPublicOrigin,
+        ...(selfHostedAuth ? { selfHostedAuth } : {}),
         ...(fcmServiceAccount ? { fcmServiceAccount } : {}),
         apns: apnsCredentials,
         apnsDeliveryJobSigningSecret: yield* apnsDeliveryJobSigningSecret,
@@ -363,6 +396,7 @@ export const layer = Api.make(
 
     const layerApp = Layer.mergeAll(
       layerRelayApi,
+      SelfHostedAuth.layerRoutes,
       HookForwarder.layerApi.pipe(
         Layer.provide(HookForwarder.layer),
         Layer.provide(layerHookRateLimiter),
@@ -370,6 +404,21 @@ export const layer = Api.make(
       layerMobileTelemetryDropped,
     ).pipe(
       Layer.provideMerge(RelayHttpApi.layerClientAuth),
+      Layer.provideMerge(
+        SelfHostedAuth.layer.pipe(
+          Layer.provide(
+            Layer.succeed(SelfHostedAuth.AuthRateLimiter, {
+              allow: Effect.fn("SelfHostedAuth.AuthRateLimiter.allow")((key: string) =>
+                hookRateLimit.limit({ key }).pipe(
+                  Effect.map((result) => result.success),
+                  Effect.provideService(Alchemy.RuntimeContext, alchemyRuntimeContext),
+                  Effect.orElseSucceed(() => false),
+                ),
+              ),
+            }),
+          ),
+        ),
+      ),
       Layer.provideMerge(RelayHttpApi.layerDpopClientAuth),
       Layer.provideMerge(RelayHttpApi.layerEnvironmentAuth),
       Layer.provide(layerRuntime),

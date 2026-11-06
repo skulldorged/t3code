@@ -199,3 +199,20 @@ export const relayDpopProofs = pgTable(
     index("idx_relay_dpop_proofs_expires_at").on(table.expiresAt),
   ],
 );
+
+export const relayAuthGrants = pgTable(
+  "relay_auth_grants",
+  {
+    hash: varchar("hash", { length: 64 }).primaryKey(),
+    kind: varchar("kind", { length: 16 }).notNull(),
+    accessHash: varchar("access_hash", { length: 64 }),
+    expiresAt: varchar("expires_at", { length: 64 }).notNull(),
+    payload: jsonb("payload")
+      .notNull()
+      .$type<import("../auth/SelfHostedAuth.ts").SelfHostedAuthPayload>(),
+  },
+  (table) => [
+    uniqueIndex("relay_auth_grants_access").on(table.accessHash),
+    index("relay_auth_grants_expiry").on(table.expiresAt),
+  ],
+);

@@ -1,4 +1,7 @@
-import { useAuth, useClerk } from "@clerk/react";
+import { isSelfHostedConnect } from "../../cloud/selfHostedAuth";
+import { openSelfHostedAccount } from "../../cloud/SelfHostedAuthShell";
+import { useClerk } from "@clerk/react";
+import { useAuth } from "../../cloud/auth";
 import { MessageSquareIcon, ServerIcon, SmartphoneIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { createPortal } from "react-dom";
@@ -33,7 +36,7 @@ export type T3ConnectAccountPageUrl = (typeof T3_CONNECT_ACCOUNT_PAGES)[number][
 type PortalTargets = Readonly<Record<string, HTMLDivElement | undefined>>;
 
 /** Keep portals rendered while the modal can open; Clerk owns the custom-page DOM nodes. */
-export function useT3ConnectAccountPage(): {
+function useClerkT3ConnectAccountPage(): {
   readonly open: ((page?: T3ConnectAccountPageUrl) => void) | null;
   readonly portals: ReactNode;
 } {
@@ -68,3 +71,11 @@ export function useT3ConnectAccountPage(): {
 
   return { open: isSignedIn ? open : null, portals };
 }
+
+function useSelfHostedAccountPage() {
+  const { isSignedIn } = useAuth();
+  return { open: isSignedIn ? openSelfHostedAccount : null, portals: null };
+}
+export const useT3ConnectAccountPage = isSelfHostedConnect()
+  ? useSelfHostedAccountPage
+  : useClerkT3ConnectAccountPage;

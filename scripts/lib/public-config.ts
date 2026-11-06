@@ -5,6 +5,7 @@ import * as NodeURL from "node:url";
 import * as NodeUtil from "node:util";
 
 export interface T3CodePublicConfig {
+  readonly connectAuthMode: string | undefined;
   readonly clerkPublishableKey: string | undefined;
   readonly clerkJwtTemplate: string | undefined;
   readonly clerkCliOAuthClientId: string | undefined;
@@ -36,6 +37,12 @@ export function loadRepoEnv({
     ...rootEnv,
     ...localEnv,
     ...baseEnv,
+    ...(config.connectAuthMode
+      ? {
+          T3CODE_CONNECT_AUTH_MODE: config.connectAuthMode,
+          VITE_T3CODE_AUTH_MODE: config.connectAuthMode,
+        }
+      : {}),
     ...(config.clerkPublishableKey
       ? {
           T3CODE_CLERK_PUBLISHABLE_KEY: config.clerkPublishableKey,
@@ -103,6 +110,7 @@ export function loadRepoEnv({
 
 function resolvePublicConfig(...sources: readonly Environment[]): T3CodePublicConfig {
   return {
+    connectAuthMode: firstNonEmpty(sources, "T3CODE_CONNECT_AUTH_MODE", "VITE_T3CODE_AUTH_MODE"),
     clerkPublishableKey: firstNonEmpty(
       sources,
       "T3CODE_CLERK_PUBLISHABLE_KEY",

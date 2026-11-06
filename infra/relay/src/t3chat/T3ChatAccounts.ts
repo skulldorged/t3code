@@ -116,6 +116,14 @@ export const make = Effect.gen(function* () {
   const lookupClerkPrimaryEmail = Effect.fn("relay.t3chat.lookup_clerk_primary_email")(function* (
     userId: string,
   ) {
+    if (config.selfHostedAuth) {
+      if (userId !== config.selfHostedAuth.accountId || !config.selfHostedAuth.accountEmail) {
+        return yield* new ClerkUserLookupFailed({
+          cause: "self_hosted_account_email_not_configured",
+        });
+      }
+      return config.selfHostedAuth.accountEmail;
+    }
     return yield* Effect.tryPromise({
       try: async () => {
         const user = await createClerkClient({

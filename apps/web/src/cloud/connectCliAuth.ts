@@ -14,6 +14,8 @@ function resolveConnectCliOAuthClientId(): string | null {
 }
 
 function hasConnectCliAuthConfig(): boolean {
+  if (resolveCloudPublicConfig().authMode === "self-hosted")
+    return resolveCloudPublicConfig().relayUrl !== null;
   return Boolean(
     resolveCloudPublicConfig().clerkPublishableKey && resolveConnectCliOAuthClientId(),
   );

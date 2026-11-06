@@ -30,7 +30,12 @@ function isSnapShotEvent(value: unknown): value is DesktopSnapShotEvent {
   );
 }
 
-exposeClerkBridge({ passkeys: true });
+declare const __T3CODE_CONNECT_AUTH_MODE__: string | undefined;
+if (
+  typeof __T3CODE_CONNECT_AUTH_MODE__ === "undefined" ||
+  __T3CODE_CONNECT_AUTH_MODE__ !== "self-hosted"
+)
+  exposeClerkBridge({ passkeys: true });
 
 // Runs before any app script reads localStorage. See DesktopLegacyLocalStorage.
 try {
@@ -74,6 +79,12 @@ function unwrapEnsureSshEnvironmentResult(result: unknown) {
 }
 
 contextBridge.exposeInMainWorld("desktopBridge", {
+  signInSelfHostedConnect: (relayUrl: string) =>
+    ipcRenderer.invoke(IpcChannels.SELF_HOSTED_CONNECT_SIGN_IN, relayUrl),
+  refreshSelfHostedConnect: (relayUrl: string) =>
+    ipcRenderer.invoke(IpcChannels.SELF_HOSTED_CONNECT_REFRESH, relayUrl),
+  signOutSelfHostedConnect: (relayUrl: string) =>
+    ipcRenderer.invoke(IpcChannels.SELF_HOSTED_CONNECT_SIGN_OUT, relayUrl),
   getAppBranding: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_APP_BRANDING_CHANNEL);
     if (typeof result !== "object" || result === null) {

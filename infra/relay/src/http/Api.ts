@@ -63,6 +63,7 @@ import * as DeliveryAttempts from "../agentActivity/DeliveryAttempts.ts";
 import * as AgentActivityRows from "../agentActivity/AgentActivityRows.ts";
 import * as Devices from "../agentActivity/Devices.ts";
 import * as DpopProofs from "../auth/DpopProofs.ts";
+import * as SelfHostedAuth from "../auth/SelfHostedAuth.ts";
 import * as RelayTokens from "../auth/RelayTokens.ts";
 import * as EnvironmentCredentials from "../environments/EnvironmentCredentials.ts";
 import * as EnvironmentLinks from "../environments/EnvironmentLinks.ts";
@@ -147,7 +148,10 @@ export const layerCors = HttpRouter.middleware(
     >,
   ) {
     const request = yield* HttpServerRequest.HttpServerRequest;
-    if (isRelayHookPath(request.url)) {
+    if (
+      isRelayHookPath(request.url) ||
+      new URL(request.url, "https://relay.invalid").pathname.startsWith("/auth/")
+    ) {
       return yield* httpEffect;
     }
     return yield* relayCorsMiddleware(httpEffect);
@@ -313,17 +317,21 @@ export const layerClientAuth = Layer.effect(
   RelayClientAuth,
   Effect.gen(function* () {
     const config = yield* RelayConfiguration.RelayConfiguration;
+    const selfHostedAuth = yield* SelfHostedAuth.SelfHostedAuth;
     return {
       clientBearer: Effect.fn("relay.auth.client.bearer")(function* (httpEffect, { credential }) {
         const token = readHttpAuthorizationCredential(credential);
-        const verified = yield* verifyRelayClientBearerToken(config, token).pipe(
+        const verified = yield* verifyRelayClientBearerToken(config, token, selfHostedAuth).pipe(
           Effect.tapError((error) =>
             Effect.annotateCurrentSpan(
               "relay.auth.clerk_verification_failure",
               clerkVerificationFailureReason(error.cause),
             ),
           ),
-          Effect.catch(() => relayAuthInvalidError("invalid_bearer")),
+          Effect.catchTags({
+            SelfHostedAuthUnavailable: () => relayInternalErrorResponse("upstream_unavailable"),
+            ClerkTokenVerificationFailed: () => relayAuthInvalidError("invalid_bearer"),
+          }),
         );
         if (!verified.sub) {
           yield* Effect.annotateCurrentSpan({
@@ -1030,6 +1038,7 @@ export const layerTokenApi = HttpApiBuilder.group(
   "token",
   Effect.fnUntraced(function* (handlers) {
     const config = yield* RelayConfiguration.RelayConfiguration;
+    const selfHostedAuth = yield* SelfHostedAuth.SelfHostedAuth;
     const random = yield* SecureRandom.SecureRandom;
     const dpopProofs = yield* DpopProofs.DpopProofReplay;
     const relayTokens = yield* RelayTokens.RelayTokens;
@@ -1051,17 +1060,22 @@ export const layerTokenApi = HttpApiBuilder.group(
           return yield* new HttpApiError.Unauthorized({});
         }
 
-        const verified = yield* verifyClerkBearerToken(config, args.payload.subject_token).pipe(
-          Effect.catch(() => relayAuthInvalidError("invalid_bearer")),
-        );
-        if (!verified.sub || !hasExpectedClerkAudience(verified.aud, config.clerkJwtAudience)) {
+        const verified = yield* verifyRelayClientBearerToken(
+          config,
+          args.payload.subject_token,
+          selfHostedAuth,
+        ).pipe(Effect.catch(() => relayAuthInvalidError("invalid_bearer")));
+        if (!verified.sub) {
           return yield* relayAuthInvalidError("invalid_bearer");
         }
         const proofKeyThumbprint = yield* requireDpopProof().pipe(
           Effect.provideService(DpopProofs.DpopProofReplay, dpopProofs),
         );
         const now = yield* DateTime.now;
-        const expiresAt = DateTime.addDuration(now, RelayTokens.RELAY_DPOP_ACCESS_TOKEN_TTL);
+        const expiresAt = DateTime.addDuration(
+          now,
+          config.selfHostedAuth ? "5 minutes" : RelayTokens.RELAY_DPOP_ACCESS_TOKEN_TTL,
+        );
         const jti = yield* random.uuidV4();
         return {
           access_token: yield* relayTokens
@@ -1715,7 +1729,24 @@ function verifyClerkOAuthBearerToken(
 export function verifyRelayClientBearerToken(
   config: RelayConfiguration.RelayConfiguration["Service"],
   token: string,
-) {
+  selfHostedAuth?: SelfHostedAuth.SelfHostedAuth["Service"],
+): Effect.Effect<
+  { sub: string; mode: string },
+  ClerkTokenVerificationFailed | SelfHostedAuth.SelfHostedAuthUnavailable
+> {
+  if (config.selfHostedAuth && token.startsWith("t3s_")) {
+    return selfHostedAuth
+      ? selfHostedAuth
+          .verify(token)
+          .pipe(
+            Effect.flatMap((verified) =>
+              verified
+                ? Effect.succeed({ ...verified, mode: "self_hosted_session_bearer" })
+                : Effect.fail(new ClerkTokenVerificationFailed({ cause: "invalid_session" })),
+            ),
+          )
+      : Effect.fail(new ClerkTokenVerificationFailed({ cause: "self_hosted_auth_unavailable" }));
+  }
   return verifyClerkBearerToken(config, token).pipe(
     Effect.flatMap((verified) =>
       verified.sub && hasExpectedClerkAudience(verified.aud, config.clerkJwtAudience)
@@ -1726,6 +1757,10 @@ export function verifyRelayClientBearerToken(
       verifyClerkOAuthBearerToken(config, token).pipe(
         Effect.map((verified) => ({ ...verified, mode: "clerk_oauth_bearer" as const })),
       ),
+    ),
+    Effect.filterOrFail(
+      (verified) => !config.selfHostedAuth || verified.sub === config.selfHostedAuth.accountId,
+      () => new ClerkTokenVerificationFailed({ cause: "unmapped_legacy_account" }),
     ),
   );
 }

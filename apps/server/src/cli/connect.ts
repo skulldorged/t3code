@@ -45,7 +45,7 @@ import {
   PUBLISH_AGENT_ACTIVITY_SECRET,
   RELAY_URL_SECRET,
 } from "../cloud/config.ts";
-import { relayUrlConfig } from "../cloud/publicConfig.ts";
+import { relayUrlConfig, selfHostedConnectAuth } from "../cloud/publicConfig.ts";
 import * as RelayTracing from "../cloud/relayTracing.ts";
 import * as ServerConfig from "../config.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
@@ -102,6 +102,7 @@ const authorizeCli = Effect.fn("cloud.cli.authorize")(function* (options: {
   const tokens = yield* CliTokenManager.CloudCliTokenManager;
   // Without a terminal, no key press can open a browser, so sign in with a code.
   const useOutOfBandOAuth =
+    selfHostedConnectAuth ||
     options.headless ||
     (yield* headlessSessionConfig) ||
     !(process.stdin.isTTY && process.stdout.isTTY);

@@ -17,6 +17,7 @@ export class CloudPublicConfigMissingError extends Schema.TaggedError<CloudPubli
 }
 
 export interface CloudPublicConfig {
+  readonly authMode: "clerk" | "self-hosted";
   readonly clerkPublishableKey: string | null;
   readonly clerkJwtTemplate: string | null;
   readonly relayUrl: string | null;
@@ -42,6 +43,7 @@ function normalizeSecureUrl(value: string): string | null {
 
 export function resolveCloudPublicConfig(): CloudPublicConfig {
   return {
+    authMode: import.meta.env.VITE_T3CODE_AUTH_MODE === "self-hosted" ? "self-hosted" : "clerk",
     clerkPublishableKey: trimNonEmpty(
       import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined,
     ),
@@ -78,6 +80,7 @@ export function resolveRelayTracingConfig() {
 
 export function hasCloudPublicConfig(): boolean {
   const config = resolveCloudPublicConfig();
+  if (config.authMode === "self-hosted") return config.relayUrl !== null;
   if (!config.clerkPublishableKey || !config.clerkJwtTemplate || !config.relayUrl) {
     return false;
   }
@@ -109,7 +112,8 @@ export function hasCloudPublicConfig(): boolean {
 }
 
 export function resolveRelayClerkTokenOptions() {
-  const { clerkJwtTemplate } = resolveCloudPublicConfig();
+  const { clerkJwtTemplate, authMode } = resolveCloudPublicConfig();
+  if (authMode === "self-hosted") return undefined;
   if (!clerkJwtTemplate) {
     throw new CloudPublicConfigMissingError({ key: "T3CODE_CLERK_JWT_TEMPLATE" });
   }
