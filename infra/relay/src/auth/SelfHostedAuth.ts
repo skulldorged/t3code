@@ -762,12 +762,14 @@ export const layer = Layer.effect(
   }),
 );
 
-export const layerRoutes = HttpRouter.add(
-  "*",
-  "/auth/*",
+export const layerRoutes = Layer.unwrap(
   Effect.gen(function* () {
     const service = yield* SelfHostedAuth;
-    return yield* service.handle(yield* HttpServerRequest.HttpServerRequest);
+    return HttpRouter.add(
+      "*",
+      "/auth/*",
+      Effect.flatMap(HttpServerRequest.HttpServerRequest, service.handle),
+    );
   }),
 );
 
