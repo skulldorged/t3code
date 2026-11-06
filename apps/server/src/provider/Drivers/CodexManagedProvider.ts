@@ -293,6 +293,11 @@ export const makeManagedCodexProvider = Effect.fn("makeManagedCodexProvider")(fu
               nativeGeneration.generateWorthKnowingReply!(value),
             ),
         }),
+    generateTranscriptionPostProcessing: (value) =>
+      protect(
+        "generateTranscriptionPostProcessing",
+        nativeGeneration.generateTranscriptionPostProcessing(value),
+      ),
   };
   return {
     instanceId,
