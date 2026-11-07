@@ -425,7 +425,14 @@ export const layer = Layer.effect(
               signal: AbortSignal.timeout(8000),
             });
             const claims = oauth.getValidatedIdTokenClaims(tokens);
-            if (!claims || claims.sub !== settings.allowedSubject) return reject();
+            if (!claims || claims.sub !== settings.allowedSubject) {
+              await run(
+                Effect.logWarning("Self-hosted sign-in rejected an account that is not allowed", {
+                  subject: claims?.sub ?? null,
+                }),
+              );
+              return reject();
+            }
             const code = random("t3c_");
             await insert(
               await digest(code),
