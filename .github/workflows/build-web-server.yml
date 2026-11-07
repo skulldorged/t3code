@@ -1,0 +1,65 @@
+name: Build web and server
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to stamp into the build artifacts
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-web-server-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  T3CODE_CLERK_PUBLISHABLE_KEY: ${{ vars.T3CODE_CLERK_PUBLISHABLE_KEY }}
+  T3CODE_CLERK_JWT_TEMPLATE: ${{ vars.T3CODE_CLERK_JWT_TEMPLATE }}
+  T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: ${{ vars.T3CODE_CLERK_CLI_OAUTH_CLIENT_ID }}
+  T3CODE_RELAY_URL: ${{ vars.T3CODE_RELAY_URL }}
+  T3CODE_CONNECT_AUTH_MODE: ${{ vars.T3CODE_CONNECT_AUTH_MODE }}
+  T3CODE_DESKTOP_UPDATE_REPOSITORY: skulldorged/t3code
+
+jobs:
+  build:
+    if: github.repository == 'skulldorged/t3code' && github.ref == 'refs/heads/main'
+    runs-on: argo-t3-build
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+      - name: Install bundle dependencies
+        run: vp install --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
+      - name: Stamp version
+        env:
+          BUILD_VERSION: ${{ inputs.version }}
+        run: node scripts/update-release-package-versions.ts "$BUILD_VERSION"
+      - uses: ./.github/actions/setup-apt-mirrors
+      - name: Install native build libraries
+        run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev pkg-config
+      - name: Build web and server bundles
+        run: vp run build:desktop
+      - name: Pack server
+        env:
+          BUILD_VERSION: ${{ inputs.version }}
+        run: |
+          mkdir -p release-publish
+          node scripts/pack-server-artifact.ts "$BUILD_VERSION" release-publish
+      - uses: actions/upload-artifact@v7
+        with:
+          name: web-server-package
+          path: release-publish/*.tgz
+          retention-days: 3
+          if-no-files-found: error
