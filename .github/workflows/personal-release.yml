@@ -45,7 +45,7 @@ env:
 
 jobs:
   metadata:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -81,7 +81,7 @@ jobs:
 
   validate:
     needs: metadata
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ github.repository == 'skulldorged/t3code' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && 'argo-t3-build' || 'ubuntu-24.04' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
@@ -131,7 +131,7 @@ jobs:
   # platform jobs package it instead of each rebuilding it.
   build_bundle:
     needs: metadata
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ github.repository == 'skulldorged/t3code' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && 'argo-t3-build' || 'ubuntu-24.04' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
@@ -187,7 +187,7 @@ jobs:
           - label: Linux x64
             platform: linux
             arch: x64
-            runner: blacksmith-4vcpu-ubuntu-2404
+            runner: ${{ github.repository == 'skulldorged/t3code' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && 'argo-t3-build' || 'ubuntu-24.04' }}
             rust_target: x86_64-unknown-linux-gnu
             resource_key: linux-x64
             cli_archive: true
@@ -195,7 +195,7 @@ jobs:
           - label: Linux arm64
             platform: linux
             arch: arm64
-            runner: blacksmith-4vcpu-ubuntu-2404-arm
+            runner: ubuntu-24.04-arm
             rust_target: aarch64-unknown-linux-gnu
             resource_key: linux-arm64
             cli_archive: true
@@ -219,7 +219,7 @@ jobs:
           - label: Windows x64
             platform: win
             arch: x64
-            runner: blacksmith-4vcpu-windows-2025
+            runner: windows-2025
             rust_target: x86_64-pc-windows-msvc
             resource_key: win32-x64
             cli_archive: true
@@ -516,7 +516,7 @@ jobs:
 
   android:
     needs: metadata
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ github.repository == 'skulldorged/t3code' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && 'argo-t3-build' || 'ubuntu-24.04' }}
     timeout-minutes: 45
     # With ccache's defaults every compile missed (0 of 114). These keep build
     # directories, compiler timestamps and include-file times out of its hash.
@@ -684,7 +684,7 @@ jobs:
 
   release:
     needs: [metadata, validate, build_bundle, platform, android, ios]
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write
