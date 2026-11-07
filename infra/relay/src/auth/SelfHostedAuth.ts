@@ -31,7 +31,6 @@ export type SelfHostedAuthPayload = {
   ciphertext?: string | undefined;
   clientState?: string | undefined;
   callbackTarget?: string | undefined;
-  providerCodeHash?: string | undefined;
 };
 type Payload = SelfHostedAuthPayload;
 
@@ -403,16 +402,15 @@ export const layer = Layer.effect(
             const state = url.searchParams.get("state");
             if (!state) return reject();
             const stateHash = await digest(state);
-            const providerCodeHash = await digest(url.searchParams.get("code") ?? "");
             const row = await consume(stateHash, "login");
             if (!row) {
               // Some providers' login pages navigate to the callback twice in quick
               // succession. The browser keeps only the last response, so answer the
-              // duplicate with the redirect the first request produced.
+              // duplicate (same state, a fresh provider code) with the redirect the
+              // first request produced.
               for (let attempt = 0; attempt < 20; attempt += 1) {
                 const replay = await get(stateHash, "callback");
                 if (replay?.payload.callbackTarget) {
-                  if (replay.payload.providerCodeHash !== providerCodeHash) return reject();
                   return HttpServerResponse.redirect(replay.payload.callbackTarget, {
                     headers: { "cache-control": "no-store", "referrer-policy": "no-referrer" },
                   });
@@ -468,12 +466,7 @@ export const layer = Layer.effect(
             const target = new URL(payload.redirectUri!);
             target.searchParams.set("code", code);
             if (payload.clientState) target.searchParams.set("state", payload.clientState);
-            await insert(
-              stateHash,
-              "callback",
-              { callbackTarget: target.href, providerCodeHash },
-              120,
-            );
+            await insert(stateHash, "callback", { callbackTarget: target.href }, 120);
             return HttpServerResponse.redirect(target.href, {
               headers: { "cache-control": "no-store", "referrer-policy": "no-referrer" },
             });
