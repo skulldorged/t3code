@@ -733,17 +733,25 @@ export const layer = Layer.effect(
           Schema.is(AuthenticationFailed)(cause) ? cause : new SelfHostedAuthUnavailable({ cause }),
       }).pipe(
         Effect.catch((error) =>
-          Effect.succeed(
-            HttpServerResponse.jsonUnsafe(
-              {
-                error: Schema.is(AuthenticationFailed)(error)
-                  ? "authentication_failed"
-                  : "temporarily_unavailable",
-              },
-              {
-                status: Schema.is(AuthenticationFailed)(error) ? 401 : 503,
-                headers: { "cache-control": "no-store" },
-              },
+          (Schema.is(AuthenticationFailed)(error)
+            ? Effect.void
+            : Effect.logError("Self-hosted auth request failed", {
+                path: new URL(request.url, config.relayIssuer).pathname,
+                cause: error.cause instanceof Error ? error.cause.stack : String(error.cause),
+              })
+          ).pipe(
+            Effect.as(
+              HttpServerResponse.jsonUnsafe(
+                {
+                  error: Schema.is(AuthenticationFailed)(error)
+                    ? "authentication_failed"
+                    : "temporarily_unavailable",
+                },
+                {
+                  status: Schema.is(AuthenticationFailed)(error) ? 401 : 503,
+                  headers: { "cache-control": "no-store" },
+                },
+              ),
             ),
           ),
         ),
