@@ -123,9 +123,9 @@ jobs:
             exclude: [path.join(mobile, "node_modules"), path.join(mobile, "**/*.test.*"), path.join(mobile, "**/*.spec.*"), path.join(mobile, "**/test-fixtures.*"), path.join(mobile, "**/*.test-support.*")],
           }));
           NODE
-          vp exec tsc --noEmit --project "$RUNNER_TEMP/t3-web-tsconfig.json"
-          vp exec tsc --noEmit --project "$RUNNER_TEMP/t3-server-tsconfig.json"
-          vp exec tsc --noEmit --project "$RUNNER_TEMP/t3-mobile-tsconfig.json"
+          vp exec effect-tsgo tsrs --noEmit --project "$RUNNER_TEMP/t3-web-tsconfig.json"
+          vp exec effect-tsgo tsrs --noEmit --project "$RUNNER_TEMP/t3-server-tsconfig.json"
+          vp exec effect-tsgo tsrs --noEmit --project "$RUNNER_TEMP/t3-mobile-tsconfig.json"
 
   # Builds the server (with the web client) and the Electron main once; the
   # platform jobs package it instead of each rebuilding it.
