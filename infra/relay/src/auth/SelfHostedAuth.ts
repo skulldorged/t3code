@@ -30,6 +30,8 @@ export type SelfHostedAuthPayload = {
   approved?: boolean | undefined;
   ciphertext?: string | undefined;
   clientState?: string | undefined;
+  callbackTarget?: string | undefined;
+  providerCodeHash?: string | undefined;
 };
 type Payload = SelfHostedAuthPayload;
 
@@ -400,8 +402,25 @@ export const layer = Layer.effect(
           if (request.method === "GET" && url.pathname === "/auth/callback") {
             const state = url.searchParams.get("state");
             if (!state) return reject();
-            const row = await consume(await digest(state), "login");
-            if (!row) return reject();
+            const stateHash = await digest(state);
+            const providerCodeHash = await digest(url.searchParams.get("code") ?? "");
+            const row = await consume(stateHash, "login");
+            if (!row) {
+              // Some providers' login pages navigate to the callback twice in quick
+              // succession. The browser keeps only the last response, so answer the
+              // duplicate with the redirect the first request produced.
+              for (let attempt = 0; attempt < 20; attempt += 1) {
+                const replay = await get(stateHash, "callback");
+                if (replay?.payload.callbackTarget) {
+                  if (replay.payload.providerCodeHash !== providerCodeHash) return reject();
+                  return HttpServerResponse.redirect(replay.payload.callbackTarget, {
+                    headers: { "cache-control": "no-store", "referrer-policy": "no-referrer" },
+                  });
+                }
+                await run(Effect.sleep("250 millis"));
+              }
+              return reject();
+            }
             const payload = row.payload;
             const as = await discover();
             const params = oauth.validateAuthResponse(as, client, url, payload.state);
@@ -449,6 +468,12 @@ export const layer = Layer.effect(
             const target = new URL(payload.redirectUri!);
             target.searchParams.set("code", code);
             if (payload.clientState) target.searchParams.set("state", payload.clientState);
+            await insert(
+              stateHash,
+              "callback",
+              { callbackTarget: target.href, providerCodeHash },
+              120,
+            );
             return HttpServerResponse.redirect(target.href, {
               headers: { "cache-control": "no-store", "referrer-policy": "no-referrer" },
             });
