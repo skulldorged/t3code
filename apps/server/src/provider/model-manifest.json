@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-09T19:07:56Z",
+  "updatedAt": "2026-11-09T22:00:00Z",
   "compatibility": [
     {
       "driver": "codex",
@@ -150,7 +150,7 @@
       "gpt-daybreak-red-latest"
     ],
     "claudeAgent": [
-      "claude-mythos-5-1",
+      "claude-mythos-5-2",
       "claude-fable-5-2",
       "claude-opus-5-5",
       "claude-sonnet-5-5",
@@ -194,7 +194,7 @@
         "chat": "claude-opus-5-5"
       },
       "profiles": {
-        "mythos-5-1": {
+        "mythos-5": {
           "capabilities": {
             "optionDescriptors": [
               {
@@ -841,12 +841,12 @@
           "adapter": { "claudeCode": { "minVersion": "2.1.284" } }
         },
         {
-          "slug": "claude-mythos-5-1",
-          "name": "Claude Mythos 5.1",
-          "aliases": ["mythos", "mythos-5.1", "claude-mythos-5.1"],
+          "slug": "claude-mythos-5-2",
+          "name": "Claude Mythos 5.2",
+          "aliases": ["mythos", "mythos-5.2", "claude-mythos-5.2"],
           "status": "current",
-          "badge": "new",
-          "profile": "mythos-5-1",
+          "releasedAt": "2026-11-09",
+          "profile": "mythos-5",
           "adapter": {
             "claudeCode": {
               "accountGated": true
@@ -860,6 +860,18 @@
           "status": "current",
           "profile": "fable-5",
           "adapter": { "claudeCode": { "minVersion": "2.1.290" } }
+        },
+        {
+          "slug": "claude-mythos-5-1",
+          "name": "Claude Mythos 5.1",
+          "aliases": ["mythos-5.1", "claude-mythos-5.1"],
+          "status": "legacy",
+          "profile": "mythos-5",
+          "adapter": {
+            "claudeCode": {
+              "accountGated": true
+            }
+          }
         },
         {
           "slug": "claude-fable-5-1",
