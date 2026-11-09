@@ -12,7 +12,8 @@ import * as Redacted from "effect/Redacted";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
-import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
+import { HttpClient, HttpClientRequest } from "effect/http";
+import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import { collectUint8StreamText } from "@t3tools/provider-core/server/collectStreamText";
 import { decodeJsonResult } from "@t3tools/shared/schemaJson";
 import { parseGitRemoteHost } from "@t3tools/source-control-core/shared/definition";
@@ -486,9 +487,10 @@ const make = Effect.gen(function* () {
 });
 
 /**
- * Personal builds use the runtime's fetch: the single-executable CLI cannot import undici, which
- * NodeHttpClient and its tuned HTTP/2 agent require.
+ * Origin answers from a few hundred milliseconds away, so a new TLS connection doubles a request.
+ * A keep-alive agent holds idle connections until Origin closes them. Undici would add HTTP/2, but
+ * the single-executable CLI cannot resolve its static import.
  */
-const httpClientLayer = FetchHttpClient.layer;
+const httpClientLayer = NodeHttpClient.layerNodeHttpOptions({ keepAlive: true });
 
 export const layer = Layer.effect(OriginCli, make).pipe(Layer.provide(httpClientLayer));

@@ -34,37 +34,6 @@ index f2ca604..46f406d 100644
        : nil
 
      return ClerkNativeBridge.shared.makeUserProfileViewController(
-diff --git a/ios/ClerkNativeBridge.swift b/ios/ClerkNativeBridge.swift
-index f369457..558eb91 100644
---- a/ios/ClerkNativeBridge.swift
-+++ b/ios/ClerkNativeBridge.swift
-@@ -671,10 +671,24 @@ final class ClerkNativeBridge {
- 
-   private static func makeClerkOptions(proxyUrl: String?) -> Clerk.Options {
-     let middleware = Clerk.Options.MiddlewareConfig(request: [ClerkExpoHeaderMiddleware()])
-+    // Signing tools may change the bundle identifier. Keep OAuth callbacks tied
-+    // to the scheme registered at build time and allowlisted by the auth service.
-+    let redirectConfig: Clerk.Options.RedirectConfig
-+    if let scheme = Bundle.main.object(forInfoDictionaryKey: "ClerkCallbackScheme") as? String,
-+       !scheme.isEmpty {
-+      redirectConfig = .init(redirectUrl: "\(scheme)://callback", callbackUrlScheme: scheme)
-+    } else {
-+      redirectConfig = .init()
-+    }
-     guard let service = keychainService else {
--      return .init(proxyUrl: proxyUrl, middleware: middleware)
-+      return .init(proxyUrl: proxyUrl, redirectConfig: redirectConfig, middleware: middleware)
-     }
--    return .init(keychainConfig: .init(service: service), proxyUrl: proxyUrl, middleware: middleware)
-+    return .init(
-+      keychainConfig: .init(service: service),
-+      proxyUrl: proxyUrl,
-+      redirectConfig: redirectConfig,
-+      middleware: middleware
-+    )
-   }
- 
-   @MainActor
 diff --git a/ios/ClerkNativeViewHost.swift b/ios/ClerkNativeViewHost.swift
 --- a/ios/ClerkNativeViewHost.swift
 +++ b/ios/ClerkNativeViewHost.swift
@@ -161,3 +130,36 @@ diff --git a/ios/ClerkNativeViewHost.swift b/ios/ClerkNativeViewHost.swift
 +  }
 +  return nil
 +}
+diff --git a/ios/ClerkNativeBridge.swift b/ios/ClerkNativeBridge.swift
+index 226f3f7..71463b0 100644
+--- a/ios/ClerkNativeBridge.swift
++++ b/ios/ClerkNativeBridge.swift
+@@ -672,12 +672,27 @@ final class ClerkNativeBridge {
+ 
+   private static func makeClerkOptions(proxyUrl: String?) -> Clerk.Options {
+     let middleware = Clerk.Options.MiddlewareConfig(request: [ClerkExpoHeaderMiddleware()])
++    // Signing tools may change the bundle identifier. Keep OAuth callbacks tied
++    // to the scheme registered at build time and allowlisted by the auth service.
++    let redirectConfig: Clerk.Options.RedirectConfig
++    if let scheme = Bundle.main.object(forInfoDictionaryKey: "ClerkCallbackScheme") as? String,
++       !scheme.isEmpty {
++      redirectConfig = .init(redirectUrl: "\(scheme)://callback", callbackUrlScheme: scheme)
++    } else {
++      redirectConfig = .init()
++    }
+     guard let service = keychainService else {
+-      return .init(proxyUrl: proxyUrl, middleware: middleware, updateRequiredViewEnabled: updateRequiredViewEnabled)
++      return .init(
++        proxyUrl: proxyUrl,
++        redirectConfig: redirectConfig,
++        middleware: middleware,
++        updateRequiredViewEnabled: updateRequiredViewEnabled
++      )
+     }
+     return .init(
+       keychainConfig: .init(service: service),
+       proxyUrl: proxyUrl,
++      redirectConfig: redirectConfig,
+       middleware: middleware,
+       updateRequiredViewEnabled: updateRequiredViewEnabled
+     )
