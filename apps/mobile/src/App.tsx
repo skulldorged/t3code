@@ -3,6 +3,7 @@ import { installComposerAttachmentUploads } from "./state/composer-attachment-up
 import { installThreadOutboxDelivery } from "./state/threadOutboxDelivery";
 import * as Linking from "expo-linking";
 import * as SplashScreen from "expo-splash-screen";
+import { requireNativeModule } from "expo";
 import { useEffect } from "react";
 import { Platform, StatusBar } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -23,7 +24,6 @@ import { DEFAULT_HOSTED_APP_URL } from "@t3tools/shared/connectAuth";
 import { RegistryContext } from "@effect/atom-react";
 import { ProjectChipIconRasterizer } from "./native/ProjectChipIconImages";
 import { ThreadArrangementHost } from "./features/threads/ThreadArrangementSheet";
-import { AgentActivityWidgetCoordinator } from "./features/agent-awareness/AgentActivityWidgetCoordinator";
 import * as Dialog from "./components/ui/Dialog";
 import { CloudAuthProvider } from "./features/cloud/CloudAuthProvider";
 import { prepareNativeShowcaseCapture } from "./features/showcase/nativeShowcaseScene";
@@ -229,7 +229,6 @@ export default function App() {
     <RegistryContext.Provider value={appAtomRegistry}>
       <BackgroundConnectionServiceCoordinator />
       <CloudAuthProvider>
-        {Platform.OS === "ios" ? <AgentActivityWidgetCoordinator /> : null}
         <AppearancePreferencesProvider>
           <AppContent />
         </AppearancePreferencesProvider>
@@ -241,6 +240,14 @@ export default function App() {
 function AppContent() {
   const { themeAppearance } = useAppearancePreferences();
   const navigationTheme = useMobileNavigationTheme();
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- matches the Android navigation bar to the app theme, as StatusBar does for the status bar
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    void requireNativeModule<{ setNavigationBarStyle(light: boolean): Promise<void> }>(
+      "T3NativeControls",
+    ).setNavigationBarStyle(themeAppearance === "light");
+  }, [themeAppearance]);
 
   return (
     <>
