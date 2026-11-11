@@ -869,6 +869,7 @@ const make = Effect.gen(function* () {
       ...(input.notification === undefined ? {} : { notification: input.notification }),
       ...(input.freshContext ? { freshContext: true } : {}),
       dispatchMode,
+      ...(mode === "auto" ? { deliveryIntent: "auto" } : {}),
       createdBy: input.createdBy,
       creationSource: input.creationSource,
     });
