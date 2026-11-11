@@ -5,6 +5,7 @@ import * as Effect from "effect/Effect";
 import * as Schedule from "effect/Schedule";
 import * as Semaphore from "effect/Semaphore";
 
+import { isCloudCliCredentialRefreshError } from "./CliTokenManager.ts";
 import { isRelayUnavailable, relayRetryAfterMillis } from "./relayResponse.ts";
 
 // Relinking revoked environments is the user's choice; startup takes no action.
@@ -122,9 +123,25 @@ export const retryDesiredLinkReconcile = <A, E, R>(
 ) =>
   retryAcrossWindow(reconcile, {
     while: isRetryable,
-    whilePastWindow: isRelayUnavailable,
+    whilePastWindow: (error) => isRelayUnavailable(error) || isCredentialRefreshUnavailable(error),
     onWindowExhausted: onRetryWindowExhausted,
   });
+
+// A credential refresh the relay answered with a server error, or never
+// answered, means the relay is down rather than refusing this host.
+function isCredentialRefreshUnavailable(error: unknown): boolean {
+  for (let current = error, depth = 0; depth < 8; depth++) {
+    if (isCloudCliCredentialRefreshError(current)) {
+      return (
+        !current.requiresLogin &&
+        (current.status === undefined || current.status === 429 || current.status >= 500)
+      );
+    }
+    if (typeof current !== "object" || current === null || !("cause" in current)) return false;
+    current = current.cause;
+  }
+  return false;
+}
 
 // Every managed host shares one relay, so a host stuck in a bad loop must not
 // turn into a fleet-wide request storm.
