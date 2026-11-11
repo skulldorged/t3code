@@ -11,6 +11,7 @@ import * as ConnectionDriver from "./driver.ts";
 import * as EnvironmentRegistry from "./registry.ts";
 import * as ConnectionOnboarding from "./onboarding.ts";
 import { connectionRoutes, hasRelayRoute } from "./routes.ts";
+import { runTailnetFleet } from "./tailnetFleet.ts";
 import * as PlatformConnectionSource from "../platform/source.ts";
 import * as RelayEnvironmentDiscovery from "../relay/discovery.ts";
 import * as RemoteEnvironmentAuthorization from "../authorization/service.ts";
@@ -89,6 +90,29 @@ export function layerWithOptions(options: RpcSession.RpcSessionOptions) {
       const platformSource = yield* PlatformConnectionSource.PlatformConnectionSource;
       yield* watchDiscoveredCompatibility().pipe(Effect.forkScoped);
       yield* registry.start;
+      // Fork: saves and signs in to every machine on the owner's tailnet.
+      yield* runTailnetFleet({
+        entries: registry.entries,
+        isSignedOut: (environmentId) =>
+          registry.state(environmentId).pipe(
+            Effect.map(
+              (state) =>
+                state.phase === "blocked" &&
+                state.lastFailure?._tag === "ConnectionBlockedError" &&
+                state.lastFailure.reason === "authentication",
+            ),
+            Effect.orElseSucceed(() => false),
+          ),
+        pair: Effect.fn("clientRuntime.tailnet.pair")(function* (machine, { saved }) {
+          const registration = yield* ConnectionOnboarding.preparePairingRegistration({
+            pairingUrl: machine.httpBaseUrl,
+            expectedEnvironmentId: machine.environmentId,
+          });
+          if (!(yield* registry.register(registration)) || saved) return;
+          yield* registry.setCompatibility(machine.environmentId, null);
+          yield* registry.setEnabled(machine.environmentId, true);
+        }),
+      }).pipe(Effect.forkScoped);
       yield* platformSource.registrations.pipe(
         Stream.runForEach(registry.reconcilePlatform),
         Effect.forkScoped,

@@ -33,6 +33,7 @@ import * as Persistence from "../platform/persistence.ts";
 import * as EnvironmentRegistry from "./registry.ts";
 import { orchestrationProtocolCompatibilityError } from "./compatibility.ts";
 import { connectionRoutes, routeEntry, sshTargetKey } from "./routes.ts";
+import { fetchTailnetPairingCode, tailnetBaseUrlFor } from "./tailnetFleet.ts";
 
 export interface PairingConnectionInput {
   readonly pairingUrl?: string;
@@ -101,7 +102,13 @@ function differentMachineError(label: string) {
 export const preparePairingRegistration = Effect.fn(
   "clientRuntime.connection.onboarding.preparePairingRegistration",
 )(function* (input: PairingConnectionInput) {
-  const target = yield* resolvePairingTarget(input);
+  // Fork: a tailnet host typed without a code gets one from that machine.
+  const tailnetBaseUrl = tailnetBaseUrlFor(input);
+  const target = yield* resolvePairingTarget(
+    tailnetBaseUrl === undefined
+      ? input
+      : { host: tailnetBaseUrl, pairingCode: yield* fetchTailnetPairingCode(tailnetBaseUrl) },
+  );
   const presentation = yield* ClientCapabilities.ClientPresentation;
   const descriptor = yield* fetchRemoteEnvironmentDescriptor({
     httpBaseUrl: target.httpBaseUrl,

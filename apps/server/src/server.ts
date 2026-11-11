@@ -90,6 +90,9 @@ import * as AgentDesktopService from "./agentDesktop/AgentDesktopService.ts";
 import * as AgentDesktopNotices from "./agentDesktop/AgentDesktopNotices.ts";
 import * as AgentDesktopStream from "./agentDesktop/AgentDesktopStream.ts";
 import * as DeviceHubProxy from "./device/DeviceHubProxy.ts";
+import * as TailnetFleet from "./tailnet/TailnetFleet.ts";
+import * as TailnetHttp from "./tailnet/http.ts";
+import * as TailnetPeerLinker from "./tailnet/TailnetPeerLinker.ts";
 import * as PreviewManager from "./preview/Manager.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
 import * as ServerBrowser from "./preview/ServerBrowser.ts";
@@ -814,6 +817,8 @@ const layerMakeRoutes = Layer.mergeAll(
     ServerHttp.layerAttachmentUploadRoute,
     GuestHttp.layer,
     DeviceHubProxy.layer,
+    // Fork: the owner's Tailscale devices find and pair with each other.
+    TailnetHttp.layer,
     ServerBrowserStream.routeLayer,
     AgentDesktopStream.routeLayer,
     ServerHttp.layerStaticAndDevRoute,
@@ -828,7 +833,9 @@ const layerMakeRoutes = Layer.mergeAll(
   Layer.effectDiscard(
     RemoteDelegation.RemoteDelegation.pipe(Effect.flatMap((remote) => remote.start())),
   ),
+  TailnetPeerLinker.layer,
 ).pipe(
+  Layer.provide(TailnetFleet.layer),
   Layer.provide(
     PullRequestReviewGuideService.layer.pipe(Layer.provide(PullRequestReviewGuides.layer)),
   ),
