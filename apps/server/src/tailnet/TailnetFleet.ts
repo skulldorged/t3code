@@ -1,7 +1,7 @@
 // Fork: a connection straight from an untagged node of this server's own
 // Tailscale account is the owner. Drop this directory once upstream's
 // pingdotgg/t3code#26757 lands.
-import { type EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId } from "@t3tools/contracts";
 import { isTailnetHost } from "@t3tools/shared/hostClassification";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { isTailscaleIpv4Address } from "@t3tools/tailscale";
@@ -12,9 +12,10 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
 
 import { ServerConfig } from "../config.ts";
-import * as PeerLinks from "../peer/PeerLinks.ts";
 import * as ProcessRunner from "../processRunner.ts";
 
 export interface TailnetDevice {
@@ -72,6 +73,7 @@ type StatusJson = typeof StatusJson.Type;
 
 const decodeWhois = Schema.decodeUnknownEffect(Schema.fromJsonString(WhoisJson));
 const decodeStatus = Schema.decodeUnknownEffect(Schema.fromJsonString(StatusJson));
+const Descriptor = Schema.Struct({ environmentId: EnvironmentId, label: Schema.String });
 
 const WHOIS_TTL = Duration.seconds(30);
 const STATUS_TTL = Duration.minutes(1);
@@ -110,7 +112,7 @@ const memoize = <K, A>(ttl: Duration.Duration, load: (key: K) => Effect.Effect<A
 const make = Effect.gen(function* () {
   const config = yield* ServerConfig;
   const runner = yield* ProcessRunner.ProcessRunner;
-  const peerLinks = yield* PeerLinks.PeerLinks;
+  const httpClient = (yield* HttpClient.HttpClient).pipe(HttpClient.filterStatusOk);
   const executable = (yield* HostProcess.Platform) === "win32" ? "tailscale.exe" : "tailscale";
 
   const tailscale = (args: ReadonlyArray<string>) =>
@@ -171,6 +173,16 @@ const make = Effect.gen(function* () {
 
   const baseUrl = (host: string) => `http://${host}:${config.port}`;
 
+  /** The T3 Code environment answering at `url`, if any. Sends no credential. */
+  const describe = (url: string) =>
+    httpClient
+      .get(`${url}/.well-known/t3/environment`)
+      .pipe(
+        Effect.flatMap(HttpClientResponse.schemaBodyJson(Descriptor)),
+        Effect.timeout(Duration.seconds(10)),
+        Effect.option,
+      );
+
   const loadMachines = Effect.gen(function* () {
     const current = yield* status("status");
     if (Option.isNone(current)) return [];
@@ -194,7 +206,7 @@ const make = Effect.gen(function* () {
     const found = yield* Effect.forEach(
       candidates,
       (candidate) =>
-        peerLinks.describe(baseUrl(candidate.host)).pipe(
+        describe(baseUrl(candidate.host)).pipe(
           Effect.map(
             Option.map((described): TailnetMachine => ({
               environmentId: described.environmentId,
