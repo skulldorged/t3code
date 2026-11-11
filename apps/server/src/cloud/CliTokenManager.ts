@@ -40,6 +40,8 @@ import {
 import { renderLoopbackAuthorizationCompleteHtml } from "./cliAuthHtml.ts";
 
 const CLOUD_CLI_OAUTH_TOKEN_SECRET = "cloud-cli-oauth-token";
+/** Fork: the account's fleet key, provisioned as `secrets/connect-fleet-key.bin`. It never expires. */
+const CONNECT_FLEET_KEY_SECRET = "connect-fleet-key";
 const CLOUD_CLI_OAUTH_CALLBACK_TIMEOUT = Duration.minutes(10);
 const CLOUD_CLI_OAUTH_REFRESH_EARLY_MS = Duration.toMillis(Duration.minutes(5));
 const DEVICE_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
@@ -499,6 +501,18 @@ export const make = Effect.gen(function* () {
     .pipe(Effect.mapError((cause) => new CloudCliCredentialRemovalError({ cause })));
 
   const read = Effect.fn("cloud.cli_token.read")(function* () {
+    const fleetKey = yield* secrets.get(CONNECT_FLEET_KEY_SECRET);
+    if (Option.isSome(fleetKey)) {
+      const key = bytesToString(fleetKey.value).trim();
+      if (key.startsWith("t3f_")) {
+        return Option.some<PersistedToken>({
+          tokenEndpoint: (yield* cloudCliOAuthConfig).tokenEndpoint,
+          accessToken: key,
+          refreshToken: "",
+          expiresAtEpochMs: Number.MAX_SAFE_INTEGER,
+        });
+      }
+    }
     const encoded = yield* secrets.get(CLOUD_CLI_OAUTH_TOKEN_SECRET);
     if (Option.isNone(encoded)) return Option.none<PersistedToken>();
     const token = yield* decodePersistedToken(bytesToString(encoded.value));

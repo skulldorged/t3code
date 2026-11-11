@@ -28,6 +28,8 @@ export interface TailnetMachine {
   readonly httpBaseUrl: string;
   /** This server. */
   readonly self: boolean;
+  /** Its Tailscale IPv4 address. */
+  readonly address: string;
 }
 
 export class TailnetFleet extends Context.Service<
@@ -187,8 +189,15 @@ const make = Effect.gen(function* () {
     const current = yield* status("status");
     if (Option.isNone(current)) return [];
     const selfHost = dnsHost(current.value.Self?.DNSName);
-    const candidates: Array<{ readonly host: string; readonly self: boolean }> = [];
-    if (selfHost !== undefined) candidates.push({ host: selfHost, self: true });
+    const candidates: Array<{
+      readonly host: string;
+      readonly self: boolean;
+      readonly address: string;
+    }> = [];
+    const selfAddress = (current.value.Self?.TailscaleIPs ?? []).find(isTailscaleIpv4Address);
+    if (selfHost !== undefined && selfAddress !== undefined) {
+      candidates.push({ host: selfHost, self: true, address: selfAddress });
+    }
     for (const peer of Object.values(current.value.Peer ?? {})) {
       const host = dnsHost(peer.DNSName);
       const address = (peer.TailscaleIPs ?? []).find(isTailscaleIpv4Address);
@@ -201,7 +210,7 @@ const make = Effect.gen(function* () {
       ) {
         continue;
       }
-      if (Option.isSome(yield* ownDevice(address))) candidates.push({ host, self: false });
+      if (Option.isSome(yield* ownDevice(address))) candidates.push({ host, self: false, address });
     }
     const found = yield* Effect.forEach(
       candidates,
@@ -213,6 +222,7 @@ const make = Effect.gen(function* () {
               label: described.label,
               httpBaseUrl: baseUrl(candidate.host),
               self: candidate.self,
+              address: candidate.address,
             })),
           ),
         ),

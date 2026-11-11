@@ -89,12 +89,43 @@ async function post(origin: string, route: string, payload: unknown) {
   if (!response.ok) throw new Error("T3 Connect sign-in service is unavailable.");
   return response.json();
 }
+// Fork: a fleet key provisioned next to the server's secrets signs this app in for good.
+const FLEET_KEY_EXPIRES_AT = "9999-12-31T23:59:59.000Z";
+const decodeFleetAccount = Schema.decodeUnknownSync(
+  Schema.Struct({ account: sessionSchema.fields.account }),
+);
+async function fleetSession(stateDir: string, origin: string): Promise<Session | null> {
+  const key = await fs
+    .readFile(path.join(stateDir, "secrets", "connect-fleet-key.bin"), "utf8")
+    .then((value) => value.trim())
+    .catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return "";
+      throw error;
+    });
+  if (!key.startsWith("t3f_")) return null;
+  const response = await fetch(`${origin}/auth/session`, {
+    headers: { authorization: `Bearer ${key}` },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) throw new Error("T3 Connect did not accept this machine's fleet key.");
+  const { account } = decodeFleetAccount(await response.json());
+  const session: Session = {
+    account,
+    accessToken: key,
+    expiresAt: FLEET_KEY_EXPIRES_AT,
+    refreshToken: "",
+  };
+  cache.set(origin, session);
+  return session;
+}
 async function refresh(stateDir: string, origin: string): Promise<Session | null> {
   const current = cache.get(origin);
   if (current && Date.parse(current.expiresAt) > Date.now() + 30_000) return current;
   const previous = pending.get(origin);
   if (previous) return previous;
   const operation = (async () => {
+    const fleet = await fleetSession(stateDir, origin);
+    if (fleet) return fleet;
     const refreshToken = await readRefresh(stateDir, origin);
     if (!refreshToken) return null;
     try {
@@ -118,6 +149,8 @@ async function refresh(stateDir: string, origin: string): Promise<Session | null
   }
 }
 async function signIn(stateDir: string, origin: string) {
+  const fleet = await fleetSession(stateDir, origin);
+  if (fleet) return publicSession(fleet);
   const verifier = randomBytes(32).toString("base64url");
   const challenge = createHash("sha256").update(verifier).digest("base64url");
   let accept: (value: string) => void = () => {};

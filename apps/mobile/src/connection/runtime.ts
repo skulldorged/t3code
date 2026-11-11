@@ -1,4 +1,4 @@
-import { Connection } from "@t3tools/client-runtime/connection";
+import { Connection, setTailnetFleetKeyReceiver } from "@t3tools/client-runtime/connection";
 import { ShellSnapshotLoader } from "@t3tools/client-runtime/state/shell";
 import { PullRequestDiffLoader } from "@t3tools/client-runtime/state/pull-requests";
 import {
@@ -14,6 +14,7 @@ import * as Runtime from "../lib/runtime";
 import { appAtomRegistry } from "../state/atom-registry";
 import * as BackgroundActivity from "./background-activity";
 import * as ConnectionPlatform from "./platform";
+import { adoptFleetKey, wantsFleetKey } from "../features/cloud/selfHostedAuth";
 
 declare const module: { readonly hot?: FoundationHotModule } | undefined;
 
@@ -64,3 +65,6 @@ export const connectionAtomRuntime: Atom.AtomRuntime<
   registry: appAtomRegistry,
   layer: layerConnection,
 });
+
+// Fork: the phone signs in to T3 Connect with the fleet key from one of the owner's machines.
+setTailnetFleetKeyReceiver({ wants: wantsFleetKey, adopt: adoptFleetKey });

@@ -1734,6 +1734,16 @@ export function verifyRelayClientBearerToken(
   { sub: string; mode: string },
   ClerkTokenVerificationFailed | SelfHostedAuth.SelfHostedAuthUnavailable
 > {
+  const fleetSettings = config.selfHostedAuth;
+  if (fleetSettings?.fleetKey !== undefined && token.startsWith("t3f_")) {
+    return Effect.promise(() => SelfHostedAuth.isFleetKey(fleetSettings, token)).pipe(
+      Effect.flatMap((matches) =>
+        matches
+          ? Effect.succeed({ sub: fleetSettings.accountId, mode: "fleet_key_bearer" })
+          : Effect.fail(new ClerkTokenVerificationFailed({ cause: "invalid_fleet_key" })),
+      ),
+    );
+  }
   if (config.selfHostedAuth && token.startsWith("t3s_")) {
     return selfHostedAuth
       ? selfHostedAuth

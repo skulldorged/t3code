@@ -176,6 +176,7 @@ export const layer = Api.make(
           clientSecret: Option.getOrUndefined(
             yield* Config.option(Config.Redacted("RELAY_OIDC_CLIENT_SECRET")),
           ),
+          fleetKey: Option.getOrUndefined(yield* Config.option(Config.Redacted("RELAY_FLEET_KEY"))),
           allowedSubject: yield* Config.String("RELAY_OIDC_ALLOWED_SUBJECT"),
           accountId: yield* Config.String("RELAY_SELF_HOSTED_ACCOUNT_ID"),
           accountEmail: Option.getOrUndefined(

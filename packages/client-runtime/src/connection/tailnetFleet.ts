@@ -110,6 +110,58 @@ const fetchTailnetMachines = Effect.fn("clientRuntime.tailnet.fetchMachines")(fu
 
 const origin = (url: string) => URL.parse(url)?.origin;
 
+const ConnectKeyResponse = Schema.Struct({ key: Schema.String });
+
+/** Where a client keeps the T3 Connect fleet key it fetches from one of the owner's machines. */
+export interface TailnetFleetKeyReceiver {
+  readonly wants: () => Promise<boolean>;
+  readonly adopt: (key: string) => Promise<void>;
+}
+let fleetKeyReceiver: TailnetFleetKeyReceiver | undefined;
+/** Clients without a provisioned fleet key (the phone) register where to keep one. */
+export function setTailnetFleetKeyReceiver(receiver: TailnetFleetKeyReceiver) {
+  fleetKeyReceiver = receiver;
+}
+
+const fetchConnectKey = Effect.fn("clientRuntime.tailnet.fetchConnectKey")(function* (
+  httpBaseUrl: string,
+) {
+  const client = yield* statusOk;
+  const response = yield* client
+    .get(`${httpBaseUrl}/api/tailnet/connect-key`)
+    .pipe(
+      Effect.flatMap(HttpClientResponse.schemaBodyJson(ConnectKeyResponse)),
+      Effect.timeout(REQUEST_TIMEOUT),
+    );
+  return response.key;
+});
+
+/** Fetches the fleet key once, from the first tailnet machine that hands it out. */
+const adoptFleetKey = Effect.fn("clientRuntime.tailnet.adoptFleetKey")(function* (
+  servers: ReadonlyArray<string>,
+) {
+  const receiver = fleetKeyReceiver;
+  if (receiver === undefined) return;
+  if (!(yield* Effect.promise(() => receiver.wants().catch(() => false)))) return;
+  for (const server of servers) {
+    const hostname = URL.parse(server)?.hostname;
+    if (hostname === undefined || !isTailnetHostname(hostname)) continue;
+    const key = yield* fetchConnectKey(server).pipe(Effect.option);
+    if (key._tag === "None") continue;
+    yield* Effect.tryPromise({
+      try: () => receiver.adopt(key.value),
+      catch: (cause) =>
+        new ConnectionBlockedError({
+          reason: "authentication",
+          detail:
+            cause instanceof Error ? cause.message : "Could not keep the T3 Connect fleet key.",
+        }),
+    });
+    yield* Effect.logInfo("Signed in to T3 Connect with the fleet key", { from: server });
+    return;
+  }
+});
+
 /** Servers this client can already reach directly, to ask for the rest of the fleet. */
 function knownServers(entries: ReadonlyMap<EnvironmentId, ConnectionCatalogEntry>) {
   const servers = new Set<string>();
@@ -165,6 +217,14 @@ export const runTailnetFleet = Effect.fn("clientRuntime.tailnet.runFleet")(funct
       const listed = yield* fetchTailnetMachines(server).pipe(Effect.orElseSucceed(() => []));
       for (const machine of listed) machines.set(machine.environmentId, machine);
     }
+    yield* adoptFleetKey([
+      ...knownServers(entries),
+      ...[...machines.values()].map((machine) => machine.httpBaseUrl),
+    ]).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning("Could not fetch the T3 Connect fleet key", { cause }),
+      ),
+    );
     for (const machine of machines.values()) {
       const saved = entries.get(machine.environmentId);
       const wanted =

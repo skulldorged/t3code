@@ -13,6 +13,7 @@ import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import * as HttpIncomingMessage from "effect/http/HttpIncomingMessage";
 
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
+import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import { deriveAuthClientMetadata } from "../auth/utils.ts";
 import { DESKTOP_RENDERER_ORIGINS } from "../httpCors.ts";
 import { TailnetFleet } from "./TailnetFleet.ts";
@@ -63,6 +64,7 @@ const callerWith = Effect.fn("TailnetHttp.caller")(function* (fleet: TailnetFlee
 const routes = (
   fleet: TailnetFleet["Service"],
   auth: EnvironmentAuth.EnvironmentAuth["Service"],
+  secrets: ServerSecretStore.ServerSecretStore["Service"],
 ) => {
   const caller = callerWith(fleet);
   const machinesRoute = HttpRouter.add(
@@ -140,11 +142,46 @@ const routes = (
     }),
   );
 
-  return Layer.mergeAll(machinesRoute, pairingRoute);
+  // The T3 Connect fleet key, for the owner's devices that are not provisioned with it (the
+  // phone). Machines that run a T3 Code server are provisioned, so they, and the agents on
+  // them, are refused.
+  const connectKeyRoute = HttpRouter.add(
+    "GET",
+    "/api/tailnet/connect-key",
+    Effect.gen(function* () {
+      const asking = yield* caller;
+      if (asking._tag === "Refused") return yield* asking.response;
+      if (Option.isNone(asking.device)) {
+        return yield* refuse(403, "Only the owner's other Tailscale devices can fetch this.");
+      }
+      const request = yield* HttpServerRequest.HttpServerRequest;
+      const address = deriveAuthClientMetadata({ request }).ipAddress;
+      if ((yield* fleet.machines).some((machine) => machine.address === address)) {
+        return yield* refuse(403, "Machines that run T3 Code are provisioned with this key.");
+      }
+      const key = yield* secrets.get("connect-fleet-key").pipe(Effect.option);
+      if (Option.isNone(key) || Option.isNone(key.value)) {
+        return yield* refuse(404, "This machine has no T3 Connect fleet key.");
+      }
+      yield* Effect.logInfo("Handed the T3 Connect fleet key to a Tailscale device", {
+        device: asking.device.value.name,
+      });
+      return yield* HttpServerResponse.json(
+        { key: new TextDecoder().decode(key.value.value).trim() },
+        { headers: NO_STORE },
+      );
+    }),
+  );
+
+  return Layer.mergeAll(machinesRoute, pairingRoute, connectKeyRoute);
 };
 
 export const layer = Layer.unwrap(
   Effect.gen(function* () {
-    return routes(yield* TailnetFleet, yield* EnvironmentAuth.EnvironmentAuth);
+    return routes(
+      yield* TailnetFleet,
+      yield* EnvironmentAuth.EnvironmentAuth,
+      yield* ServerSecretStore.ServerSecretStore,
+    );
   }),
 );

@@ -43,7 +43,26 @@ export interface SelfHostedAuthSettings {
   readonly accountEmail?: string | undefined;
   readonly redirectUris: ReadonlyArray<string>;
   readonly sessionDays: number;
+  /** Fork: one key every machine and app of the account uses; it never expires. */
+  readonly fleetKey?: Redacted.Redacted<string> | undefined;
 }
+
+const sha256 = (value: string) =>
+  crypto.subtle
+    .digest("SHA-256", new TextEncoder().encode(value))
+    .then((bytes) => new Uint8Array(bytes));
+
+/** Whether `token` is the account's fleet key, compared without leaking where it differs. */
+export const isFleetKey = async (settings: SelfHostedAuthSettings | undefined, token: string) => {
+  const key = settings?.fleetKey === undefined ? "" : Redacted.value(settings.fleetKey);
+  if (key === "" || !token.startsWith("t3f_")) return false;
+  const [presented, expected] = await Promise.all([sha256(token), sha256(key)]);
+  let difference = 0;
+  for (let index = 0; index < expected.length; index++) {
+    difference |= presented[index]! ^ expected[index]!;
+  }
+  return difference === 0;
+};
 class AuthenticationFailed extends Schema.TaggedError<AuthenticationFailed>()(
   "SelfHostedAuthenticationFailed",
   {},
@@ -426,6 +445,15 @@ export const layer = Layer.effect(
               { headers: { "cache-control": "no-store" } },
             );
           if (!settings) return HttpServerResponse.empty({ status: 404 });
+          // Fork: the account a fleet key signs in as, for clients that hold one.
+          if (request.method === "GET" && url.pathname === "/auth/session") {
+            const bearer = /^Bearer (.+)$/.exec(request.headers.authorization ?? "")?.[1] ?? "";
+            if (!(await isFleetKey(settings, bearer))) return reject();
+            return HttpServerResponse.jsonUnsafe(
+              { account: account() },
+              { headers: { "cache-control": "no-store" } },
+            );
+          }
           if (
             ["/auth/start", "/auth/device_authorization", "/auth/device/approve"].includes(
               url.pathname,

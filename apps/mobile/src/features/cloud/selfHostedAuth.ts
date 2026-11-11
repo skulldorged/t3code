@@ -13,6 +13,8 @@ interface StoredSession {
   readonly account: Account;
   readonly refreshToken: string;
   readonly relayUrl?: string;
+  /** Fork: the account's fleet key, fetched once from one of the owner's machines. It never expires. */
+  readonly fleetKey?: string;
 }
 interface SessionResponse extends StoredSession {
   readonly accessToken: string;
@@ -158,6 +160,7 @@ export function readSelfHostedToken(): Promise<string | null> {
   const operation = (async () => {
     await loadSelfHostedAuth();
     if (operationEpoch !== epoch || !stored) return null;
+    if (stored.fleetKey) return stored.fleetKey;
     if (access && access.expiresAt > Date.now() + 60_000) return access.token;
     const response = await request("/auth/refresh", { refreshToken: stored.refreshToken });
     if (operationEpoch !== epoch) return null;
@@ -176,6 +179,42 @@ export function readSelfHostedToken(): Promise<string | null> {
     refreshOperation = null;
   });
   return refreshOperation;
+}
+
+/** Whether this device still needs the fleet key. */
+export async function wantsFleetKey(): Promise<boolean> {
+  if (!selfHostedAuthEnabled) return false;
+  await loadSelfHostedAuth();
+  return !stored?.fleetKey;
+}
+
+/** Signs this device in with the fleet key, for good. */
+export async function adoptFleetKey(key: string): Promise<void> {
+  if (!key.startsWith("t3f_")) throw new Error("That is not a T3 Connect fleet key.");
+  const response = await authFetch("/auth/session", {
+    method: "GET",
+    headers: { authorization: `Bearer ${key}` },
+  });
+  if (!response.ok) throw new Error("T3 Connect did not accept the fleet key.");
+  const body = (await response.json()) as { readonly account?: Partial<Account> };
+  if (typeof body.account?.id !== "string" || !body.account.id)
+    throw new Error("Invalid sign-in response.");
+  const account = body.account as Account;
+  const operationEpoch = ++epoch;
+  const next: StoredSession = {
+    account,
+    refreshToken: "",
+    fleetKey: key,
+    relayUrl: resolveCloudPublicConfig().relay.url ?? undefined,
+  };
+  await changeStorage(async () => {
+    if (operationEpoch === epoch)
+      await SecureStore.setItemAsync(storageKey, JSON.stringify(next), storageOptions);
+  });
+  if (operationEpoch !== epoch) return;
+  stored = next;
+  access = null;
+  publish(account);
 }
 
 function base64Url(bytes: Uint8Array): string {
