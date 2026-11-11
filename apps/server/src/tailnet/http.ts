@@ -1,6 +1,6 @@
 // Fork: routes the owner's own Tailscale devices use to find this fleet's
 // machines and pair with them without a code. See TailnetFleet.ts.
-import { AuthMcpClientAccess } from "@t3tools/contracts";
+import { AuthMcpClientAccess, mcpClientScopes } from "@t3tools/contracts";
 import { isLocalLoopbackHost, isTailnetHost } from "@t3tools/shared/hostClassification";
 import { isTailscaleIpv4Address } from "@t3tools/tailscale";
 import * as ByteSize from "effect/ByteSize";
@@ -112,9 +112,11 @@ const routes = (
       if (Option.isNone(body)) return yield* refuse(400, "The request was not valid.");
       const access = body.value.access;
       return yield* auth
-        .issuePairingCredential({
+        // A peer link signs in with a plain code that carries its access level's
+        // scopes; an app approval code (issuePairingCredential with access) is refused.
+        .createPairingLink({
           label: `Tailscale · ${device.name}`,
-          ...(access === undefined ? {} : { access }),
+          ...(access === undefined ? {} : { scopes: mcpClientScopes(access) }),
         })
         .pipe(
           Effect.tap(() =>
