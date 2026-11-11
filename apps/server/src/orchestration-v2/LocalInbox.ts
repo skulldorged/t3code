@@ -96,7 +96,11 @@ export const layer = Layer.effectDiscard(
         ) {
           return yield* setAside(file, name, tag);
         }
-        return; // Transient; the next sweep retries with the same command id.
+        // A retry replays the first delivery's receipt. If that message has no
+        // run left to show, it was still delivered, and retrying never ends.
+        if (tag !== "ThreadManagementDurableRunProjectionError") {
+          return; // Transient; the next sweep retries with the same command id.
+        }
       }
       yield* fs.remove(file).pipe(Effect.ignore);
     });
