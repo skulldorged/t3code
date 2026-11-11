@@ -41,8 +41,8 @@ import {
   MessagesSquareIcon,
   Redo2Icon,
   PencilIcon,
+  LinkIcon,
 } from "lucide-react";
-import { Link as LinkIconNode } from "lucide";
 import { Button, InlineButton } from "../ui/button";
 import { FreshSessionRow, ModelSwitchRow } from "./V2LifecycleRow";
 import { useAssetUrlRefresh, useAssetUrls, useAssetUrlState } from "../../assets/assetUrls";
@@ -406,7 +406,7 @@ function AutomationMessageRow({ row }: { row: Extract<TimelineRow, { kind: "mess
                 <MessageCopyButton
                   text={promptLink}
                   label="Copy prompt link"
-                  icon={LinkIconNode}
+                  icon={LinkIcon}
                   variant="ghost"
                 />
               )}
@@ -877,7 +877,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
           <MessageCopyButton
             text={promptLink}
             label="Copy prompt link"
-            icon={LinkIconNode}
+            icon={LinkIcon}
             variant="ghost"
           />
         )}
