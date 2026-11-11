@@ -174,7 +174,7 @@ function selectOpenCodeRuntimeTextGeneration(
         v2: v2.generateReviewGuide(input),
       }),
     generateWorthKnowingReply: (input) =>
-      byOpenCodeRuntime(probe.get, {
+      byOpenCodeRuntime(resolve, {
         v1: v1.generateWorthKnowingReply?.(input) ?? worthKnowingUnsupported,
         v2: v2.generateWorthKnowingReply?.(input) ?? worthKnowingUnsupported,
       }),

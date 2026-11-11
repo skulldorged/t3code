@@ -396,9 +396,10 @@ const make = Effect.gen(function* () {
             })
             .pipe(Effect.mapError(mapError(input, "update-thread", threadId)));
         }
-        const isRepository = yield* git
-          .isRepository(project.workspaceRoot)
-          .pipe(Effect.mapError(mapError(input, "provision-worktree", threadId)));
+        const isRepository =
+          (yield* git
+            .repositoryRoot(project.workspaceRoot)
+            .pipe(Effect.mapError(mapError(input, "provision-worktree", threadId)))) !== null;
         if (!isRepository) {
           branch = null;
           yield* setupTracker.stageStatus(threadId, "fetch", "skipped");
