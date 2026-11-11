@@ -32,6 +32,64 @@ export function validatePersonalSources(value) {
   };
 }
 
+const UPSTREAM = "https://github.com/pingdotgg/t3code";
+const UPSTREAM_LIMIT = 30;
+// Only what someone using the app would notice.
+const HIDDEN_TYPES = new Set(["test", "ci", "chore", "build", "docs", "refactor", "style"]);
+
+/** A commit subject as a release-note bullet without its type prefix, or null to hide it. */
+function releaseNoteLine(subject) {
+  const conventional = /^(\w+)(?:\([^)]*\))?!?:\s*(.*)$/.exec(subject);
+  if (conventional && HIDDEN_TYPES.has(conventional[1].toLowerCase())) return null;
+  const text = (conventional ? conventional[2] : subject).replace(/\s*\[skip ci\]\s*$/i, "").trim();
+  if (text === "" || /^merge\b/i.test(text)) return null;
+  const linked = text.replace(
+    /\(#(\d+)\)$/,
+    (_, number) => `([#${number}](${UPSTREAM}/pull/${number}))`,
+  );
+  return `- ${linked.charAt(0).toUpperCase()}${linked.slice(1)}`;
+}
+
+/** What changed since the previous personal release, newest first. */
+function changeLines(git, integrationSha) {
+  const previous = git("tag", "--list", "personal-v*", "--sort=-creatordate")
+    .split("\n")
+    .filter(Boolean)
+    .find((tag) => {
+      const sha = git("rev-list", "-n", "1", tag);
+      if (sha === integrationSha) return false;
+      try {
+        git("merge-base", "--is-ancestor", sha, integrationSha);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+  if (previous === undefined) return [];
+  const subjects = git("log", "--no-merges", "--format=%s", `${previous}..${integrationSha}`)
+    .split("\n")
+    .filter(Boolean);
+  const personal = [];
+  const upstream = [];
+  for (const subject of subjects) {
+    const line = releaseNoteLine(subject);
+    if (line !== null) (/\(#\d+\)( \[skip ci\])?$/i.test(subject) ? upstream : personal).push(line);
+  }
+  const lines = [];
+  if (personal.length > 0) lines.push("### Personal", "", ...personal, "");
+  if (upstream.length > 0) {
+    lines.push("### From upstream", "", ...upstream.slice(0, UPSTREAM_LIMIT));
+    if (upstream.length > UPSTREAM_LIMIT) {
+      lines.push(
+        `- And ${upstream.length - UPSTREAM_LIMIT} more ([all changes](${UPSTREAM}/commits/main))`,
+      );
+    }
+    lines.push("");
+  }
+  if (lines.length === 0) lines.push("No user-facing changes since the previous build.", "");
+  return lines;
+}
+
 export function writePersonalSources({ cwd, input, expectedSha, outputDirectory }) {
   const sources = validatePersonalSources(input);
   const git = (...args) =>
@@ -48,6 +106,7 @@ export function writePersonalSources({ cwd, input, expectedSha, outputDirectory 
     `${JSON.stringify({ schemaVersion: 1, integrationSha, ...sources }, null, 2)}\n`,
   );
   const lines = [
+    ...changeLines(git, integrationSha),
     `Built from integration commit \`${integrationSha}\`.`,
     "",
     `- Upstream main: [${sources.mainSha.slice(0, 12)}](https://github.com/pingdotgg/t3code/commit/${sources.mainSha})`,

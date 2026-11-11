@@ -747,7 +747,7 @@ jobs:
         with:
           tag_name: v${{ needs.metadata.outputs.version }}
           name: T3 Code Nightly ${{ needs.metadata.outputs.version }}
-          body: Desktop updater feed for the matching personal release. Both tags contain the same build.
+          body_path: release-assets/personal-release-notes.md
           target_commitish: ${{ github.sha }}
           prerelease: true
           make_latest: false
