@@ -345,6 +345,47 @@ export const layer = Layer.effect(
       );
       return changed ? responseFor(tokens, oauthFormat) : graceResponse(oldHash!, oauthFormat);
     };
+    // A session keeps one refresh token for its whole life; a refresh issues an
+    // access token and extends the session. Rotating the refresh token signed
+    // clients out whenever they missed the answer to a refresh that still
+    // committed, which a slow database or a sleeping laptop made routine.
+    const renewResponse = async (
+      payload: Payload,
+      hash: string,
+      refreshToken: string,
+      oauthFormat: boolean,
+    ) => {
+      await run(db.delete(relayAuthGrants).where(lt(relayAuthGrants.expiresAt, now())));
+      if (!settings || payload.userId !== settings.accountId || !payload.sessionId) return reject();
+      const accessToken = random("t3s_");
+      const expiresAt = future(300);
+      const access = {
+        hash: await digest(accessToken),
+        kind: "access",
+        payload: { userId: payload.userId, sessionId: payload.sessionId },
+        expiresAt,
+      };
+      const sessionExpiresAt = future(settings.sessionDays * 86400);
+      const renewed = await run(
+        db.$client.withTransaction(
+          Effect.gen(function* () {
+            const rows = yield* db
+              .update(relayAuthGrants)
+              .set({ expiresAt: sessionExpiresAt })
+              .where(and(eq(relayAuthGrants.hash, hash), eq(relayAuthGrants.kind, "session")))
+              .returning({ hash: relayAuthGrants.hash });
+            if (rows.length !== 1) return false;
+            yield* db.insert(relayAuthGrants).values(access);
+            return true;
+          }),
+        ),
+      );
+      if (!renewed) return reject();
+      return responseFor(
+        { accessToken, refreshToken, expiresAt, cookie: payload.cookie === true },
+        oauthFormat,
+      );
+    };
     const verify = Effect.fn("relay.self_hosted_auth.verify")(function* (token: string) {
       if (!settings || !token.startsWith("t3s_")) return null;
       return yield* Effect.tryPromise({
@@ -740,7 +781,7 @@ export const layer = Layer.effect(
           )
             return row.kind === "rotation"
               ? graceResponse(hash, url.pathname === "/auth/token")
-              : sessionResponse(row.payload, hash, url.pathname === "/auth/token");
+              : renewResponse(row.payload, hash, refresh, url.pathname === "/auth/token");
           if (url.pathname === "/auth/logout") {
             await run(
               db
