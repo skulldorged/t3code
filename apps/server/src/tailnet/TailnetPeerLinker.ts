@@ -47,8 +47,11 @@ const make = Effect.gen(function* () {
     if (Option.isNone(existing)) return true;
     const link = existing.value;
     const now = yield* DateTime.now;
+    const tailnetOrigin = URL.parse(machine.httpBaseUrl)?.origin;
     return (
       link.access !== "full-access" ||
+      // A link made through T3 Connect stops working once the relay is gone.
+      !link.urls.some((url) => URL.parse(url)?.origin === tailnetOrigin) ||
       DateTime.isLessThan(link.expiresAt, DateTime.addDuration(now, RENEW_WITHIN))
     );
   });
