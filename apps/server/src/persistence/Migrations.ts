@@ -388,17 +388,46 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
   const sql = yield* SqlClient.SqlClient;
   const includesV2 =
     toMigrationInclusive === undefined || toMigrationInclusive >= FIRST_V2_MIGRATION_ID;
-  const executedMigrations = yield* sql.withTransaction(
+  // Historical V2 reconciliation rewrites the ledger, so it commits as one unit with the preview
+  // reconciliation and the pre-run checks.
+  const prelude = yield* sql.withTransaction(
     Effect.gen(function* () {
       const reconciled = yield* reconcileHistoricalV2(toMigrationInclusive);
       const preview = includesV2 ? yield* reconcileV2PreviewMigration() : [];
       if (includesV2) {
         yield* assertV2MigrationsCanRun(toMigrationInclusive);
       }
-      const pending = yield* run({ loader: makeMigrationLoader(toMigrationInclusive) });
-      return [...reconciled, ...preview, ...pending];
+      return [...reconciled, ...preview];
     }),
   );
+  const ledger = yield* sql`
+    SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'effect_sql_migrations'
+  `;
+  const [latest] =
+    ledger.length === 0
+      ? []
+      : yield* sql<{
+          readonly id: number | null;
+        }>`SELECT MAX(migration_id) AS id FROM effect_sql_migrations`;
+  const latestRecordedId = latest?.id ?? 0;
+  const pending = migrationEntries.filter(
+    ([id]) =>
+      id > latestRecordedId && (toMigrationInclusive === undefined || id <= toMigrationInclusive),
+  );
+  // One transaction per migration: an index build on a large database can take minutes, and a
+  // restart then resumes after the last finished migration instead of rolling all of them back.
+  const executedMigrations: Array<readonly [id: number, name: string]> = [...prelude];
+  for (const [index, [id, name]] of pending.entries()) {
+    if (latestRecordedId > 0) {
+      yield* Effect.log("Upgrading database").pipe(
+        Effect.annotateLogs({
+          migration: `${id}_${name}`,
+          progress: `${index + 1} of ${pending.length}`,
+        }),
+      );
+    }
+    executedMigrations.push(...(yield* run({ loader: makeMigrationLoader(id) })));
+  }
   const migrations = executedMigrations.map(([id, name]) => `${id}_${name}`);
   yield* migrations.length === 0
     ? Effect.logDebug("Database schema is current")
