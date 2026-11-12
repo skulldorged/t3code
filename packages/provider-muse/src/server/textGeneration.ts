@@ -23,6 +23,7 @@ import {
 import { museModelCapabilities, resolveMuseReasoningEffort } from "./modelCatalog.ts";
 import type { ProviderTextGeneration } from "@t3tools/provider-core/server/textGeneration";
 import {
+  generatedThreadTitle,
   investigationUnsupported,
   TranscriptionPostProcessingOutput,
 } from "@t3tools/provider-core/server/textGenerationOperations";
@@ -36,7 +37,6 @@ import {
 import {
   sanitizeCommitSubject,
   sanitizePrTitle,
-  sanitizeThreadTitle,
   toJsonSchemaObject,
 } from "@t3tools/provider-core/server/textGenerationUtils";
 
@@ -349,7 +349,7 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
       ...buildThreadTitlePrompt(input),
       modelSelection: input.modelSelection,
     });
-    return { title: sanitizeThreadTitle(generated.title) };
+    return { title: yield* generatedThreadTitle(generated.title) };
   });
   const generateWorthKnowingReply: ProviderTextGeneration["generateWorthKnowingReply"] = Effect.fn(
     "MuseTextGeneration.generateWorthKnowingReply",
