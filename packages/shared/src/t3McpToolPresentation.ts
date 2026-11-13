@@ -69,7 +69,8 @@ export type T3McpToolSummaryAction =
   | "device"
   | "html-preview"
   | "html-render"
-  | "fleet";
+  | "fleet"
+  | "send-to-user";
 
 export interface T3McpToolDefinition {
   readonly displayName: string;
@@ -416,6 +417,7 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
   fleet_container: tool(["Use", "Using", "Used", "a project container"], "fleet"),
   fleet_vm: tool(["Use", "Using", "Used", "a host VM"], "fleet"),
   fleet_diag: tool(["Check", "Checking", "Checked", "macOS diagnostics"], "fleet"),
+  send_to_user: tool(["Send", "Sending", "Sent", "a message"], "send-to-user"),
 };
 
 export const T3_MCP_TOOL_NAMES: ReadonlySet<string> = new Set(Object.keys(T3_MCP_TOOLS));
