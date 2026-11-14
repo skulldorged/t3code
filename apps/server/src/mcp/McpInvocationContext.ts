@@ -149,6 +149,11 @@ export interface McpInvocationScope {
     readonly endpoint: string;
     readonly authorization: string;
   };
+  /**
+   * The origin this `/mcp` request reached, e.g. a T3 Connect tunnel. Hosted clients cannot
+   * see the URL they were configured with, so links they must fetch carry it. Unset in-process.
+   */
+  readonly origin?: string | undefined;
 }
 
 /**

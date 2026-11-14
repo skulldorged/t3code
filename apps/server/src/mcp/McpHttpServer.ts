@@ -282,9 +282,11 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
     const linkedEnvironments = yield* linksEnabled;
     if (limited.client?.linked === true && !linkedEnvironments) return linkedEnvironmentsOff;
     const host = request.headers.host;
+    const origin = Option.getOrUndefined(Option.map(requestUrl(request), (url) => url.origin));
     return {
       ...limited,
       linkedEnvironments,
+      origin,
       ...(threadInvocation === undefined || host === undefined
         ? {}
         : {
