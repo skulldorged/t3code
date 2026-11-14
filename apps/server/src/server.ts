@@ -182,6 +182,7 @@ import * as ConnectReachability from "./cloud/ConnectReachability.ts";
 import { pendingServiceUpdateExists } from "./cloud/updateHandoff.ts";
 import * as RelayTracing from "./cloud/relayTracing.ts";
 import * as CloudManagedEndpointRuntime from "./cloud/ManagedEndpointRuntime.ts";
+import * as RelayClientLedger from "./cloud/RelayClientLedger.ts";
 import {
   MANAGED_TUNNEL_FIRST_REGISTRATION_JITTER,
   makeManagedTunnelRecovery,
@@ -561,6 +562,14 @@ const layerCloudManagedEndpointRuntime = Layer.mergeAll(
   CloudManagedEndpointRuntime.layer.pipe(
     Layer.provide(ServerSecretStore.layer),
     Layer.provide(layerRelayClient),
+    Layer.provide(
+      Layer.unwrap(
+        Effect.gen(function* () {
+          const config = yield* ServerConfig.ServerConfig;
+          return RelayClientLedger.layer({ stateDir: config.stateDir });
+        }),
+      ),
+    ),
   ),
 );
 
@@ -725,6 +734,8 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   Layer.provideMerge(Layer.merge(ProjectStore.layer, ThreadSearch.layer)),
   Layer.provideMerge(SecretCheck.layer),
   Layer.provideMerge(SecretResolver.layer),
+  // Above the settings it writes when a theme is applied.
+  Layer.provideMerge(EnvironmentTheme.layer),
   Layer.provideMerge(layerServerSettings),
   Layer.provideMerge(layerSourceControlProviderRegistry),
   Layer.provideMerge(layerGit),
@@ -733,9 +744,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
     Layer.mergeAll(layerTerminal, layerPreview, layerDevice, AgentDesktopService.layer),
   ),
   Layer.provideMerge(layerPersistence),
-  Layer.provideMerge(
-    Layer.mergeAll(Keybindings.layer, EnvironmentTheme.layer, UsageLimitSources.layer),
-  ),
+  Layer.provideMerge(Layer.mergeAll(Keybindings.layer, UsageLimitSources.layer)),
   Layer.provideMerge(ProviderRegistry.layer),
   Layer.provideMerge(
     ProviderInstanceRegistryHydration.layer.pipe(Layer.provide(SqlitePersistence.layerConfig)),
@@ -922,6 +931,17 @@ const layerMakeServer = Layer.unwrap(
         yield* HttpServer.HttpServer;
         const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
         yield* startup.markHttpListening;
+      }),
+    );
+    const layerDesktopReadySignal = Layer.effectDiscard(
+      Effect.gen(function* () {
+        const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
+        const receiver = yield* DesktopTelemetryReceiver.DesktopTelemetryReceiver;
+        yield* startup.awaitCommandReady.pipe(
+          Effect.andThen(receiver.announceServerReady),
+          Effect.ignore,
+          Effect.forkScoped,
+        );
       }),
     );
     const layerRuntimeState = Layer.effectDiscard(
@@ -1304,6 +1324,7 @@ const layerMakeServer = Layer.unwrap(
     const layerServerApplication = Layer.mergeAll(
       layerRoutes,
       layerHttpListening,
+      layerDesktopReadySignal,
       layerRuntimeState.pipe(Layer.provide(layerLauncher)),
       layerTailscaleServe,
       layerCloudDesiredLinkReconcile,
