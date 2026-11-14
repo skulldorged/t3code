@@ -1,6 +1,6 @@
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
-import { effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
+import { effectiveSnoozed, hasUnseenRunFailure } from "@t3tools/client-runtime/state/thread-settled";
 import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";
 import {
   isProviderNativeSubagentThread,
@@ -11,7 +11,6 @@ import {
 
 import {
   hasUnseenCompletion,
-  hasUnseenFailure,
   resolveSidebarThreadStatus,
   resolveThreadLastVisitedAt,
 } from "./Sidebar.logic";
@@ -116,7 +115,7 @@ export function collectShellThreads(input: ShellThreadsInput): DesktopShellThrea
       createdAt: thread.createdAt,
       startedAt: thread.latestRun?.startedAt ?? null,
       completedAt: thread.latestRun?.completedAt ?? null,
-      unseen: hasUnseenFailure(visited) || hasUnseenCompletion(visited),
+      unseen: hasUnseenRunFailure(visited) || hasUnseenCompletion(visited),
     };
   };
   const activity = (thread: DesktopShellThread) => thread.startedAt ?? thread.createdAt;
