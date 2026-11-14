@@ -270,6 +270,9 @@ patchedDependencies:
   app-builder-lib@26.16.1: patches/app-builder-lib@26.16.1.patch
   # Fork: background relay auth's getClerkInstance call must not swap out the native-synced token cache.
   "@clerk/expo@4.15.1": patches/@clerk__expo@4.15.1.patch
+  # The spawner takes an injected spawn function (and uses it for taskkill) so Windows launches
+  # can run on worker threads: apps/server/src/process/SpawnWorker.ts.
+  "@effect/platform-node-shared@4.1.2": patches/@effect__platform-node-shared@4.1.2.patch
   # Electron net requests never emit "socket", so upstream's idle timeout never fires and a
   # stalled update download hangs forever.
   electron-updater@6.8.9: patches/electron-updater@6.8.9.patch
