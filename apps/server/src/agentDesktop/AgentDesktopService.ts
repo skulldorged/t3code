@@ -2,7 +2,7 @@
 /**
  * VNC desktops agents registered with their threads, and who controls each.
  *
- * An agent's tooling (fleet) registers a desktop's loopback VNC port through
+ * An agent's tooling registers a desktop's loopback VNC port through
  * MCP. Viewers attach through `/api/agent-desktop/ws`, which carries the VNC
  * bytes unchanged except that a viewer's input is dropped unless that viewer
  * took control. While someone has control, `status` tells the agent's tooling
@@ -188,7 +188,7 @@ const make = Effect.gen(function* () {
       NodeFs.mkdirSync(NodePath.dirname(storePath), { recursive: true });
       NodeFs.writeFileSync(storePath, `${JSON.stringify(stored, null, 2)}\n`, { mode: 0o600 });
     } catch {
-      // Registrations still work for this run; fleet registers again when used.
+      // Registrations still work for this run; tooling registers again when used.
     }
   };
 

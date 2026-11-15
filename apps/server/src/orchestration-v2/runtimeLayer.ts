@@ -40,7 +40,6 @@ import * as ProviderContinuationRequests from "@t3tools/provider-core/server/Pro
 import * as ProviderContinuationService from "./ProviderContinuationService.ts";
 import * as ThreadTitleRegenerationService from "./ThreadTitleRegenerationService.ts";
 import * as ProviderEventIngestor from "./ProviderEventIngestor.ts";
-import * as ExternalApprovals from "./ExternalApprovals.ts";
 import * as LocalInbox from "./LocalInbox.ts";
 import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
@@ -116,17 +115,6 @@ const layerProviderEventIngestorProvided = ProviderEventIngestor.layer.pipe(
       ProjectionStore.layer,
       ThreadCommandExecutor.layer,
       GitVcsDriver.layer,
-    ),
-  ),
-);
-
-const layerExternalApprovalsProvided = ExternalApprovals.layer.pipe(
-  Layer.provide(
-    Layer.mergeAll(
-      IdAllocator.layer,
-      ProjectionStore.layer,
-      layerProviderEventIngestorProvided,
-      TurnItemPositionStore.layer,
     ),
   ),
 );
@@ -389,7 +377,6 @@ const layerMcpAppRequestsProvided = McpAppRequests.layer.pipe(
 export const layer = Layer.mergeAll(
   layerCommandOutputHubProvided,
   layerOrchestratorProvided,
-  layerExternalApprovalsProvided,
   layerMcpAppRequestsProvided,
   layerThreadManagementProvided,
   layerEffectWorkerProvided,

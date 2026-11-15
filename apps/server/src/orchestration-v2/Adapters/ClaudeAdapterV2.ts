@@ -216,7 +216,6 @@ import type { ManagedServerProvider } from "@t3tools/provider-core/server/snapsh
 import {
   T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH,
   T3_CODE_ORCHESTRATION_INSTRUCTIONS,
-  t3HostToolInstructionsWithToolSearch,
 } from "@t3tools/provider-core/server/orchestrationInstructions";
 import { buildRuntimeInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
 import {
@@ -2118,9 +2117,6 @@ const CLAUDE_BACKGROUND_WAIT_INSTRUCTIONS = `
 To wait for a background command or Monitor you started (tests, a build), call \`t3_background_wait\` with its task ID before you end your turn. Do not mark work you leave running, or PRs. T3 MCP tools are deferred: load one with ToolSearch before you call it.
 `;
 
-const hostToolSection = (instructions: string | undefined) =>
-  instructions === undefined ? "" : `\n${instructions}\n`;
-
 // Claude 5.1+ returns text written before a tool call as a progress update, which the API
 // returns only as a summary.
 const CLAUDE_SEND_TO_USER_INSTRUCTIONS = `
@@ -2312,8 +2308,7 @@ export function makeClaudeQueryOptions(input: {
               CLAUDE_SEND_TO_USER_INSTRUCTIONS +
               (deviceInstructions
                 ? `\n${T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH}\n`
-                : "") +
-              hostToolSection(t3HostToolInstructionsWithToolSearch())),
+                : "")),
         ...launchAppendSystemPrompt,
       ].join("\n\n"),
     },

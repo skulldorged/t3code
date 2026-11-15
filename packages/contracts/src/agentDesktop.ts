@@ -1,6 +1,6 @@
 /**
  * Agent desktops - VNC desktops an agent registered with its thread, such as
- * a fleet desktop running a GUI app or a headed browser. The environment
+ * a headless desktop running a GUI app or a headed browser. The environment
  * server proxies each one's VNC so clients can watch it in the right panel
  * and take control of it, the way they take control of a server browser tab.
  *

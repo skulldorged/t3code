@@ -30,11 +30,9 @@ import { parseBearerToken } from "../auth/EnvironmentAuth.ts";
 import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as DeviceService from "../device/DeviceService.ts";
-import * as FleetTools from "../fleet/FleetTools.ts";
 import * as HtmlRender from "../htmlRender/HtmlRender.ts";
 import * as ThreadCommandExecutor from "../orchestration-v2/ThreadCommandExecutor.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
-import * as Project from "../project/ProjectService.ts";
 import * as PullRequestWatchService from "../pullRequest/PullRequestWatchService.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as AnalyticsService from "../telemetry/AnalyticsService.ts";
@@ -46,13 +44,11 @@ import {
   toolOutcome,
 } from "../telemetry/ProviderDimensions.ts";
 import { advertisedJsonSchema } from "./advertisedJsonSchema.ts";
-import { assertNotLinked } from "./linkOrigin.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as McpToolAccess from "./McpToolAccess.ts";
 import * as McpToolExposure from "./McpToolExposure.ts";
 import { MCP_TOOL_EXPOSURE_HEADER } from "@t3tools/provider-core/server/mcpSession";
 import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
-import { assertFullAccess, assertLiveCaller, loadCaller, unavailable } from "./threadAccess.ts";
 import { PreviewControlsToolkit } from "./toolkits/previewControls/tools.ts";
 import * as PreviewControlsHandlers from "./toolkits/previewControls/handlers.ts";
 import { EnvironmentToolkit } from "./toolkits/environment/tools.ts";
@@ -282,20 +278,11 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
     const limited = McpInvocationContext.withRuntimeModeCeiling(asked, runtimeModeCeiling);
     const linkedEnvironments = yield* linksEnabled;
     if (limited.client?.linked === true && !linkedEnvironments) return linkedEnvironmentsOff;
-    const host = request.headers.host;
     const origin = Option.getOrUndefined(Option.map(requestUrl(request), (url) => url.origin));
     return {
       ...limited,
       linkedEnvironments,
       origin,
-      ...(threadInvocation === undefined || host === undefined
-        ? {}
-        : {
-            threadCredential: {
-              endpoint: `http://${host}/mcp`,
-              authorization: `Bearer ${token}`,
-            },
-          }),
     };
   });
   // Untraced: a span here would wrap the tool call; the HTTP server span already covers it.
@@ -1149,103 +1136,6 @@ const withToolAnalytics =
     return yield* registration.pipe(Effect.provideService(McpServer.McpServer, recordingServer));
   });
 
-const fleetChangeNeedsFullAccess =
-  "Fleet tools that change something need a full-access thread in default mode. Ask the user to switch, or use the fleet CLI from your shell.";
-
-/**
- * Fleet's tools (FleetTools), advertised as fleet lists them. Each call runs
- * as the calling thread, in its directory; fleet keeps it in the agent
- * sandbox. Read-only tools need only a live thread; the rest act for it, so
- * they take the same full-access/default mode T3's own environment changes do.
- */
-const registerFleetTools = Effect.fn("McpHttpServer.registerFleetTools")(function* () {
-  const fleet = yield* FleetTools.FleetTools;
-  if (fleet.tools.length === 0) return;
-  const server = yield* McpServer.McpServer;
-  const threads = yield* ThreadManagementService.ThreadManagementService;
-  const projects = yield* Project.ProjectService;
-  for (const definition of fleet.tools) {
-    const call = Effect.fn("McpHttpServer.fleetToolCall")(function* (payload: unknown) {
-      const scope = yield* McpInvocationContext.McpInvocationContext;
-      const { thread } = yield* McpInvocationContext.requireThreadScope(scope, "Fleet tools");
-      if (!definition.readOnly && scope.client?.access === "read-only") {
-        return yield* new OrchestratorMcpFailure({
-          code: "capability_denied",
-          message: "This MCP client was approved for read-only access.",
-        });
-      }
-      const caller = yield* loadCaller();
-      yield* assertLiveCaller(caller);
-      yield* assertNotLinked(caller, "use this machine's fleet");
-      if (!definition.readOnly) yield* assertFullAccess(caller, fleetChangeNeedsFullAccess);
-      const shell = caller.caller;
-      if (shell === undefined) return yield* unavailable();
-      const project = yield* projects.getById(shell.projectId).pipe(Effect.mapError(unavailable));
-      if (Option.isNone(project)) return yield* unavailable();
-      const credential = scope.threadCredential;
-      return yield* fleet.call({
-        name: definition.name,
-        arguments: payload,
-        cwd: shell.worktreePath ?? project.value.workspaceRoot,
-        environment: {
-          T3_THREAD_ID: thread.threadId,
-          ...(credential === undefined
-            ? {}
-            : { T3_MCP_URL: credential.endpoint, T3_MCP_AUTHORIZATION: credential.authorization }),
-        },
-      });
-    });
-    yield* server.addTool({
-      tool: new McpSchema.Tool({
-        name: definition.name,
-        title: definition.title,
-        description: definition.description,
-        inputSchema: definition.inputSchema,
-        annotations: {
-          title: definition.title,
-          readOnlyHint: definition.readOnly,
-          destructiveHint: definition.destructive,
-          idempotentHint: false,
-          openWorldHint: true,
-        },
-      }),
-      annotations: Context.empty(),
-      handle: (payload) =>
-        Effect.withFiber((fiber) => {
-          const invocation = Context.getUnsafe(
-            fiber.context,
-            McpInvocationContext.McpInvocationContext,
-          );
-          return call(payload).pipe(
-            Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
-            Effect.provideService(ThreadManagementService.ThreadManagementService, threads),
-            Effect.provideService(Project.ProjectService, projects),
-            Effect.match({
-              onFailure: (error) =>
-                new McpSchema.CallToolResult({
-                  isError: true,
-                  content: [{ type: "text", text: error.message }],
-                }),
-              onSuccess: (result) =>
-                new McpSchema.CallToolResult({
-                  isError: result.isError,
-                  content: result.content.map((block) =>
-                    block.type === "text"
-                      ? block
-                      : {
-                          type: "image" as const,
-                          data: new Uint8Array(Buffer.from(block.data, "base64")),
-                          mimeType: block.mimeType,
-                        },
-                  ),
-                }),
-            }),
-          );
-        }),
-    });
-  }
-});
-
 /** Each tool call gets a span named for its tool; arguments stay out, as they carry prompts and IDs. */
 const withToolSpans = Effect.fn("McpHttpServer.withToolSpans")(function* <A, E, R>(
   registration: Effect.Effect<A, E, R>,
@@ -1425,10 +1315,6 @@ export const layerDeviceToolkit = Layer.mergeAll(
   layerDeviceScreenshotRegistration,
 );
 
-const layerFleetToolkit = Layer.effectDiscard(
-  withToolAnalytics(withToolSpans(registerFleetTools())),
-).pipe(Layer.provide(FleetTools.layer));
-
 /**
  * `McpServer` for in-process calls, which provide `McpInvocationContext`
  * around `callTool` as the auth middleware does for each /mcp request.
@@ -1517,7 +1403,4 @@ export const layerToolSearch = Layer.mergeAll(
   layerDeferredListing,
 ).pipe(Layer.provide(layerToolExposure));
 
-/** Fleet's tools depend on the host, so they stay out of the measured set. */
-export const layer = layerMcpTransport(
-  Layer.mergeAll(layerTools, layerToolSearch, layerFleetToolkit),
-);
+export const layer = layerMcpTransport(Layer.mergeAll(layerTools, layerToolSearch));

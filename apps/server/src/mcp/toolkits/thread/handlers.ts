@@ -23,7 +23,6 @@ import {
 } from "../../threadAccess.ts";
 import type * as ThreadManagement from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as ThreadSearch from "../../../orchestration-v2/ThreadSearch.ts";
-import * as ExternalApprovals from "../../../orchestration-v2/ExternalApprovals.ts";
 import * as ScheduledTasks from "../../../scheduledTasks/ScheduledTaskService.ts";
 import { queuedRunsInDeliveryOrder } from "../../../orchestration-v2/QueuedRunOrder.ts";
 import { ThreadToolkit } from "./tools.ts";
@@ -94,22 +93,6 @@ const readQuestion = Effect.fn("mcp.readQuestion")(function* (input: {
     });
   return { ...context, request, item };
 });
-const approvalFailure = (error: ExternalApprovals.ExternalApprovalError) =>
-  error.reason === "unexpected-failure"
-    ? unavailable()
-    : new OrchestratorMcpFailure({ code: "invalid_request", message: error.message });
-
-/** Approvals belong to the calling thread; another thread can't ask or read them. */
-const callingThread = Effect.fn("mcp.callingThread")(function* () {
-  const { caller } = yield* readCaller();
-  if (caller === undefined)
-    return yield* new OrchestratorMcpFailure({
-      code: "invalid_request",
-      message: "Approvals can only be requested from a T3 thread.",
-    });
-  return caller.id;
-});
-
 /** A field the chosen action needs. `null` counts as given, as in `beforeRunId: null`. */
 const required = <A>(value: A | undefined, name: string) =>
   value === undefined
@@ -125,35 +108,6 @@ const writesThread = <P extends { readonly threadId?: ThreadId | undefined }, A,
 ) => McpToolAccess.writesThreads((params: P) => [params.threadId], handle);
 
 export const layer = McpToolAccess.toLayer(ThreadToolkit, {
-  t3_approval_request: McpToolAccess.actsAsCaller((input) =>
-    Effect.gen(function* () {
-      const threadId = yield* callingThread();
-      const approvals = yield* ExternalApprovals.ExternalApprovals;
-      // Full access approves everything the thread does without asking, as it
-      // does a provider's own approvals, so record this one already approved
-      // and no client ever shows it pending. Only the user sets a thread's
-      // mode; threads an agent starts can't exceed it.
-      const { projection } = yield* readThread(threadId);
-      return yield* approvals
-        .raise({
-          threadId,
-          prompt: input.prompt,
-          ...(input.appName === undefined ? {} : { appName: input.appName }),
-          ...(input.options === undefined ? {} : { options: input.options }),
-          ...(projection.thread.runtimeMode === "full-access" ? { decision: "accept" } : {}),
-        })
-        .pipe(Effect.mapError(approvalFailure));
-    }),
-  ),
-  t3_approval_status: McpToolAccess.readsAsCaller((input) =>
-    Effect.gen(function* () {
-      const threadId = yield* callingThread();
-      const approvals = yield* ExternalApprovals.ExternalApprovals;
-      return yield* approvals
-        .status({ threadId, requestId: input.requestId })
-        .pipe(Effect.mapError(approvalFailure));
-    }),
-  ),
   t3_thread_notify: McpToolAccess.notifiesCaller((input) =>
     Effect.gen(function* () {
       const { caller, threads } = yield* readCaller();

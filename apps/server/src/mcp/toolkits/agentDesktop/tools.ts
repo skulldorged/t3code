@@ -23,7 +23,7 @@ const dependencies = [
 const AgentDesktopToolFailure = Schema.Union([AgentDesktopToolError, OrchestratorMcpFailure]);
 
 /**
- * For tooling that runs desktops for agents (fleet calls these itself), not
+ * For tooling that runs desktops for agents (it calls these itself), not
  * for agents to drive desktops: they keep using their own tools for that.
  */
 const AgentDesktopRegisterTool = Tool.make("agent_desktop_register", {

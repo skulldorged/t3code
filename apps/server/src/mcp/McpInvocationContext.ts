@@ -142,14 +142,6 @@ export interface McpInvocationScope {
   /** False while the Linked environments beta is off here; `/mcp` reads it per request. */
   readonly linkedEnvironments?: boolean;
   /**
-   * How the calling thread's provider reached `/mcp`, for tools that run its
-   * commands (fleet's), which reach T3 as that thread the same way.
-   */
-  readonly threadCredential?: {
-    readonly endpoint: string;
-    readonly authorization: string;
-  };
-  /**
    * The origin this `/mcp` request reached, e.g. a T3 Connect tunnel. Hosted clients cannot
    * see the URL they were configured with, so links they must fetch carry it. Unset in-process.
    */

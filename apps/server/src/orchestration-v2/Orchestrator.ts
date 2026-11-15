@@ -11098,9 +11098,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         return yield* recordSubagentFollowup(answer, events).pipe(mapDispatchError(answer));
       }
       if (runtimeRequest.responseCapability.type === "external") {
-        // Nothing waits on a provider callback. An approved request reports
-        // back itself (fleet posts the command's result), so only a refusal
-        // needs a notice to tell the agent not to wait for one.
+        // Requests raised from outside the provider, kept so threads that
+        // have them still load. Nothing waits on a provider callback, and an
+        // approved request reported back itself, so only a refusal needs a
+        // notice to tell the agent not to wait for one.
         if (command.decision === "accept" || command.decision === "acceptForSession") return;
         const outcome = command.decision === "decline" ? "Declined" : "Cancelled";
         const item = approvalTurnItem?.type === "approval_request" ? approvalTurnItem : undefined;
