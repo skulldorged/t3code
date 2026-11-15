@@ -8,7 +8,7 @@ import {
   OrchestratorMcpFailure,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import { Tool, Toolkit } from "effect/ai";
+import { McpSchema, Tool, Toolkit } from "effect/ai";
 
 import * as AgentDesktopService from "../../../agentDesktop/AgentDesktopService.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
@@ -38,7 +38,8 @@ const AgentDesktopRegisterTool = Tool.make("agent_desktop_register", {
   .annotate(Tool.Readonly, false)
   .annotate(Tool.Destructive, false)
   .annotate(Tool.Idempotent, true)
-  .annotate(Tool.OpenWorld, false);
+  .annotate(Tool.OpenWorld, false)
+  .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
 
 const AgentDesktopUnregisterTool = Tool.make("agent_desktop_unregister", {
   description: "Remove a desktop from this thread's panel, for example after stopping it.",
@@ -51,7 +52,8 @@ const AgentDesktopUnregisterTool = Tool.make("agent_desktop_unregister", {
   .annotate(Tool.Readonly, false)
   .annotate(Tool.Destructive, false)
   .annotate(Tool.Idempotent, true)
-  .annotate(Tool.OpenWorld, false);
+  .annotate(Tool.OpenWorld, false)
+  .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
 
 const AgentDesktopStatusTool = Tool.make("agent_desktop_status", {
   description:
@@ -65,7 +67,8 @@ const AgentDesktopStatusTool = Tool.make("agent_desktop_status", {
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false)
   .annotate(Tool.Idempotent, true)
-  .annotate(Tool.OpenWorld, false);
+  .annotate(Tool.OpenWorld, false)
+  .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
 
 const AgentDesktopRequestTool = Tool.make("agent_desktop_request", {
   description:
@@ -79,7 +82,8 @@ const AgentDesktopRequestTool = Tool.make("agent_desktop_request", {
   .annotate(Tool.Readonly, false)
   .annotate(Tool.Destructive, false)
   .annotate(Tool.Idempotent, false)
-  .annotate(Tool.OpenWorld, false);
+  .annotate(Tool.OpenWorld, false)
+  .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
 
 export const AgentDesktopToolkit = Toolkit.make(
   AgentDesktopRegisterTool,
