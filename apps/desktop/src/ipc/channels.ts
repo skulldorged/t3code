@@ -145,3 +145,4 @@ export const COMPLETE_LEGACY_LOCAL_STORAGE_CHANNEL = "desktop:complete-legacy-lo
 export const SELF_HOSTED_CONNECT_SIGN_IN = "desktop:self-hosted-connect-sign-in";
 export const SELF_HOSTED_CONNECT_REFRESH = "desktop:self-hosted-connect-refresh";
 export const SELF_HOSTED_CONNECT_SIGN_OUT = "desktop:self-hosted-connect-sign-out";
+export const RESTART_AUDIO_SERVICE_CHANNEL = "desktop:restart-audio-service";
