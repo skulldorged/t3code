@@ -484,6 +484,21 @@ export function summarizeT3ToolCalls(
     case "capabilities":
       label = phrase("Checked", "check", `orchestration capabilities ${times}`);
       break;
+    case "command-run":
+      label = phrase("Ran", "run", quantity(selected.length, "command"));
+      break;
+    case "command-output":
+      label = phrase("Read", "read", `command output ${times}`);
+      break;
+    case "command-stop":
+      label = phrase("Stopped", "stop", quantity(countEntities(entityIds("jobId")), "command"));
+      break;
+    case "command-list":
+      label = phrase("Listed", "list", `commands ${times}`);
+      break;
+    case "file-copy":
+      label = phrase("Made", "make", quantity(selected.length, "copy", "copies"));
+      break;
   }
   return { label, failedCount };
 }

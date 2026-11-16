@@ -87,6 +87,10 @@ import * as TerminalManager from "./terminal/Manager.ts";
 import * as McpHttpServer from "./mcp/McpHttpServer.ts";
 import * as PeerForwarding from "./peer/PeerForwarding.ts";
 import * as RemoteDelegation from "./peer/RemoteDelegation.ts";
+import * as CommandFollows from "./commands/CommandFollows.ts";
+import * as CommandJobs from "./commands/CommandJobs.ts";
+import * as CommandsHttp from "./commands/http.ts";
+import * as FileTransfer from "./commands/FileTransfer.ts";
 import * as PeerLinkRequests from "./peer/PeerLinkRequests.ts";
 import * as PeerLinks from "./peer/PeerLinks.ts";
 import * as PeerMcpClient from "./peer/PeerMcpClient.ts";
@@ -864,6 +868,8 @@ const layerMakeRoutes = Layer.mergeAll(
     DeviceHubProxy.layer,
     // Fork: the owner's Tailscale devices find and pair with each other.
     TailnetHttp.layer,
+    // Fork: t3_copy's side here, for linked machines.
+    CommandsHttp.layer,
     ServerBrowserStream.routeLayer,
     AgentDesktopStream.routeLayer,
     ServerHttp.layerStaticAndDevRoute,
@@ -878,6 +884,10 @@ const layerMakeRoutes = Layer.mergeAll(
   Layer.effectDiscard(
     RemoteDelegation.RemoteDelegation.pipe(Effect.flatMap((remote) => remote.start())),
   ),
+  // Fork: wakes threads whose t3_run jobs end, including after a restart.
+  Layer.effectDiscard(
+    CommandFollows.CommandFollows.pipe(Effect.flatMap((follows) => follows.start())),
+  ),
   TailnetPeerLinker.layer,
 ).pipe(
   Layer.provide(TailnetFleet.layer),
@@ -886,6 +896,13 @@ const layerMakeRoutes = Layer.mergeAll(
   ),
   // delegate_task to a linked environment, from /mcp and the follower above.
   Layer.provide(RemoteDelegation.layer.pipe(Layer.provide(ProjectionStoreV2.layer))),
+  // Fork: t3_run and t3_copy, from /mcp, the routes and the follower above.
+  Layer.provide(
+    Layer.merge(
+      CommandFollows.layer.pipe(Layer.provideMerge(CommandJobs.layer)),
+      FileTransfer.layer,
+    ),
+  ),
   // Links agents ask for: shown in a thread from /mcp, answered over WebSocket.
   Layer.provide(PeerLinkRequests.layer),
   // Share the service so HTTP/WS clients single-flight reads and invalidate each other's cached patches.

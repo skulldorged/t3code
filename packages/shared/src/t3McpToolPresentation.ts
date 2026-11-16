@@ -71,7 +71,12 @@ export type T3McpToolSummaryAction =
   | "device"
   | "html-preview"
   | "html-render"
-  | "send-to-user";
+  | "send-to-user"
+  | "command-run"
+  | "command-output"
+  | "command-stop"
+  | "command-list"
+  | "file-copy";
 
 export interface T3McpToolDefinition {
   readonly displayName: string;
@@ -369,6 +374,11 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
     ["Update", "Updating", "Updated", "environment preferences"],
     "environment-update",
   ),
+  t3_run: tool(["Run", "Running", "Ran", "a command"], "command-run"),
+  t3_run_output: tool(["Read", "Reading", "Read", "command output"], "command-output"),
+  t3_run_stop: tool(["Stop", "Stopping", "Stopped", "a command"], "command-stop"),
+  t3_run_list: tool(["List", "Listing", "Listed", "commands"], "command-list"),
+  t3_copy: tool(["Copy", "Copying", "Copied", "files"], "file-copy"),
   t3_theme_read: tool(["Read", "Reading", "Read", "themes"], "theme-read"),
   t3_theme_set: tool(["Set", "Setting", "Set", "the theme"], "theme-set"),
   t3_thread_launch: tool(["Launch", "Launching", "Launched", "a project thread"], "thread-create"),

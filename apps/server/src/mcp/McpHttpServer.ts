@@ -81,6 +81,8 @@ import { ToolSearchToolkit } from "./toolkits/toolSearch/tools.ts";
 import { PullRequestsToolkit } from "./toolkits/pullRequests/tools.ts";
 import * as DeviceHandlers from "./toolkits/device/handlers.ts";
 import * as AgentDesktopHandlers from "./toolkits/agentDesktop/handlers.ts";
+import * as CommandsHandlers from "./toolkits/commands/handlers.ts";
+import { CommandsToolkit } from "./toolkits/commands/tools.ts";
 import { AgentDesktopToolkit } from "./toolkits/agentDesktop/tools.ts";
 import {
   DeviceScreenshotTool,
@@ -302,6 +304,9 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
 const layerMcpAuthMiddleware = HttpRouter.middleware<{
   provides: McpInvocationContext.McpInvocationContext;
 }>()(makeMcpAuthMiddleware).layer;
+
+/** Fork: the /mcp credential check, for routes beside it such as t3_copy's. */
+export const layerMcpAuthentication = layerMcpAuthMiddleware;
 
 /** Claude Code spills oversized results to files, losing locators; bound both text and its preferred structuredContent. */
 export const MAX_SNAPSHOT_TEXT_BYTES = 20_000;
@@ -1359,6 +1364,8 @@ export const layerTools = Layer.mergeAll(
   layerPullRequestsToolkit,
   layerDeviceToolkit,
   toolkitRegistration(AgentDesktopToolkit, AgentDesktopHandlers.layer),
+  // Fork: commands and copies on this machine or linked ones.
+  toolkitRegistration(CommandsToolkit, CommandsHandlers.layer),
   layerHtmlToolkit,
   layerMessageToolkit,
 );
