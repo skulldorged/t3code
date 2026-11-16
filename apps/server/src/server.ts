@@ -868,8 +868,8 @@ const layerMakeRoutes = Layer.mergeAll(
     DeviceHubProxy.layer,
     // Fork: the owner's Tailscale devices find and pair with each other.
     TailnetHttp.layer,
-    // Fork: t3_copy's side here, for linked machines.
-    CommandsHttp.layer,
+    // Fork: t3_copy's side here, for linked machines, which sign in as outside clients.
+    CommandsHttp.layer.pipe(Layer.provide(McpOAuth.layerMcpClientAuthenticator)),
     ServerBrowserStream.routeLayer,
     AgentDesktopStream.routeLayer,
     ServerHttp.layerStaticAndDevRoute,

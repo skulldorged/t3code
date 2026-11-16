@@ -305,8 +305,15 @@ const layerMcpAuthMiddleware = HttpRouter.middleware<{
   provides: McpInvocationContext.McpInvocationContext;
 }>()(makeMcpAuthMiddleware).layer;
 
-/** Fork: the /mcp credential check, for routes beside it such as t3_copy's. */
-export const layerMcpAuthentication = layerMcpAuthMiddleware;
+/**
+ * Fork: the /mcp credential check for routes beside it, such as t3_copy's.
+ * Its own layer, not /mcp's: layers are built once, and /mcp's must be built
+ * where outside clients' authenticator is provided.
+ */
+export const layerMcpAuthentication = () =>
+  HttpRouter.middleware<{
+    provides: McpInvocationContext.McpInvocationContext;
+  }>()(makeMcpAuthMiddleware).layer;
 
 /** Claude Code spills oversized results to files, losing locators; bound both text and its preferred structuredContent. */
 export const MAX_SNAPSHOT_TEXT_BYTES = 20_000;

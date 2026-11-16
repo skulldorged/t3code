@@ -129,4 +129,4 @@ export const layer = Layer.unwrap(
     const threads = yield* ThreadManagement.ThreadManagementService;
     return routes(transfer, threads);
   }),
-).pipe(Layer.provide(layerMcpAuthentication));
+).pipe(Layer.provide(layerMcpAuthentication()));
