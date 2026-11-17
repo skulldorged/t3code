@@ -39,8 +39,10 @@ import { SecretRequestCard } from "./SecretRequestCard";
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import {
   WorktreePreparingHeader,
-  WorktreeWorkingHeader,
   WorktreeSetupCard,
+  WorktreeSetupDetails,
+  WorktreeSetupFoldChip,
+  worktreeSetupHandedOff,
   type WorktreeSetupCardProps,
 } from "./worktree-setup-card";
 import * as Haptics from "expo-haptics";
@@ -352,7 +354,6 @@ export interface ThreadFeedHistoryControls {
 export interface ThreadFeedProps {
   readonly toolCallVisibility?: ToolCallVisibility;
   readonly worktreeSetup?: WorktreeSetupCardProps | null;
-  readonly setupWorkingStartedAt?: string | null;
   readonly preparingWorktree?: boolean;
   readonly queuedMessages: ReadonlyArray<QueuedThreadMessage>;
   readonly dispatchingMessageId: MessageId | null;
@@ -1869,7 +1870,12 @@ function renderFeedEntry(
     | "threadId"
     | "workspaceRoot"
     | "delegatedTasks"
+    | "worktreeSetup"
   > & {
+    /** The fold row of the turn the worktree setup handed off to. */
+    readonly setupFoldRowId: string | null;
+    readonly setupDetailsOpen: boolean;
+    readonly onOpenSetupDetails: () => void;
     readonly pendingFoldMessageId: string | null;
     readonly formatMessageTime: (input: string) => string;
     readonly copiedRowId: string | null;
@@ -1971,6 +1977,13 @@ function renderFeedEntry(
             iconColor={iconSubtleColor}
           />
         )}
+        {props.worktreeSetup && entry.id === props.setupFoldRowId ? (
+          <WorktreeSetupFoldChip
+            {...props.worktreeSetup}
+            detailsOpen={props.setupDetailsOpen}
+            onOpenDetails={props.onOpenSetupDetails}
+          />
+        ) : null}
         {entry.checkpointSummary ? (
           <TurnDiffStat
             checkpoint={entry.checkpointSummary}
@@ -3613,12 +3626,16 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   // LegendList does not invalidate visible rows when only the renderItem closure changes.
   // Include turn completion so unchanged message rows reveal their footer and spacing
   // even when the final message update arrives before the turn settles.
+  // One sheet for the setup's card, chip, and summary row, so it stays open as setup moves between them.
+  const [setupDetailsThreadId, setSetupDetailsThreadId] = useState<string | null>(null);
+  const setupDetailsOpen = setupDetailsThreadId === props.threadId && !!props.worktreeSetup;
+  const openSetupDetails = () => setSetupDetailsThreadId(props.threadId);
   const listAppearanceData = {
+    setupDetailsOpen,
     disclosureLayout,
     reduceMotion,
     formatMessageTime,
     worktreeSetup: props.worktreeSetup,
-    setupWorkingStartedAt: props.setupWorkingStartedAt,
     preparingWorktree: props.preparingWorktree,
     dispatchingMessageId: props.dispatchingMessageId,
     unsettledTurnId,
@@ -3730,13 +3747,22 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const setupAnchorIndex = presentedFeed.findIndex(
     (entry) => entry.type === "message" && entry.message.role === "user",
   );
+  // As on web, setup still running after the agent took the turn rides on the live Working row.
+  const setupFoldRowId =
+    props.worktreeSetup &&
+    worktreeSetupHandedOff(props.worktreeSetup) &&
+    props.worktreeSetup.snapshot.phase === "running"
+      ? (presentedFeed.find(
+          (entry, index) =>
+            index > setupAnchorIndex &&
+            entry.type === "run-fold" &&
+            entry.workingSince !== undefined,
+        )?.id ?? null)
+      : null;
   const [groupFeed] = useState(createThreadFeedGrouping);
   const groupedFeed = groupFeed(presentedFeed, {
     workflowOpeningMessageId: workflowOpening?.messageId,
-    setupAnchorIndex:
-      props.worktreeSetup || props.setupWorkingStartedAt || props.preparingWorktree
-        ? setupAnchorIndex
-        : undefined,
+    setupAnchorIndex: props.worktreeSetup || props.preparingWorktree ? setupAnchorIndex : undefined,
   });
   const { contentInsetEndAdjustment } = props;
   const attachList = (list: LegendListRef | null) => {
@@ -4070,6 +4096,10 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             environmentId: props.environmentId,
             dispatchingMessageId: props.dispatchingMessageId,
             pendingFoldMessageId,
+            setupFoldRowId,
+            worktreeSetup: props.worktreeSetup,
+            setupDetailsOpen,
+            onOpenSetupDetails: openSetupDetails,
             onEditPendingMessage: props.onEditPendingMessage,
             onUseArtifactTemplate: props.onUseArtifactTemplate,
             threadId: props.threadId,
@@ -4111,9 +4141,12 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             workflowOpening,
           })}
           {props.worktreeSetup && info.index === setupAnchorIndex ? (
-            <WorktreeSetupCard key={props.threadId} {...props.worktreeSetup} />
-          ) : props.setupWorkingStartedAt && info.index === setupAnchorIndex ? (
-            <WorktreeWorkingHeader startedAt={props.setupWorkingStartedAt} />
+            <WorktreeSetupCard
+              key={props.threadId}
+              {...props.worktreeSetup}
+              detailsOpen={setupDetailsOpen}
+              onOpenDetails={openSetupDetails}
+            />
           ) : props.preparingWorktree && info.index === setupAnchorIndex ? (
             <WorktreePreparingHeader />
           ) : null}
@@ -4216,7 +4249,12 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
               <>
                 {usesNativeAutomaticInsets ? null : <View style={{ height: topContentInset }} />}
                 {setupAnchorIndex < 0 && props.worktreeSetup ? (
-                  <WorktreeSetupCard key={props.threadId} {...props.worktreeSetup} />
+                  <WorktreeSetupCard
+                    key={props.threadId}
+                    {...props.worktreeSetup}
+                    detailsOpen={setupDetailsOpen}
+                    onOpenDetails={openSetupDetails}
+                  />
                 ) : setupAnchorIndex < 0 && props.preparingWorktree ? (
                   <WorktreePreparingHeader />
                 ) : null}
@@ -4269,6 +4307,12 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
           </View>
         ) : null}
         <VideoPreviewModal source={expandedVideo} onRequestClose={closeVideoPreview} />
+        {setupDetailsOpen && props.worktreeSetup ? (
+          <WorktreeSetupDetails
+            {...props.worktreeSetup}
+            onClose={() => setSetupDetailsThreadId(null)}
+          />
+        ) : null}
         <FilePreviewModal source={expandedFile} onRequestClose={closeFilePreview} />
       </View>
     </PresentationSource>

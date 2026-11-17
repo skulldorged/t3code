@@ -1102,7 +1102,8 @@ export interface DesktopBridge {
   refreshSelfHostedConnect: (relayUrl: string) => Promise<SelfHostedConnectSession | null>;
   signOutSelfHostedConnect: (relayUrl: string) => Promise<void>;
   getAppBranding: () => DesktopAppBranding | null;
-  getRelayTelemetryEnabled: () => boolean;
+  /** `null` until the desktop host has read the login shell's environment; ask again later. */
+  getRelayTelemetryEnabled: () => boolean | null;
   getPathForFile: (file: File) => string;
   getClientPlatform: () => string;
   restartAudioService?: () => Promise<boolean>;
