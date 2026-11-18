@@ -2,6 +2,7 @@ import { isSelfHostedConnect } from "../../cloud/selfHostedAuth";
 import { openSelfHostedAccount } from "../../cloud/SelfHostedAuthShell";
 import { UserButton } from "@clerk/react";
 import { useAuth } from "../../cloud/auth";
+import { T, useGT, useMessages } from "gt-react";
 import { LogInIcon, RotateCwIcon } from "lucide-react";
 
 import { hasCloudPublicConfig } from "../../cloud/publicConfig";
@@ -24,6 +25,7 @@ export function T3ConnectSidebarAvatar() {
 
 function ConfiguredT3ConnectSidebarAvatar() {
   const { isLoaded, isSignedIn } = useAuth();
+  const m = useMessages();
 
   if (!isLoaded || !isSignedIn) return null;
 
@@ -40,7 +42,7 @@ function ConfiguredT3ConnectSidebarAvatar() {
       {T3_CONNECT_ACCOUNT_PAGES.map((page) => (
         <UserButton.UserProfilePage
           key={page.url}
-          label={page.label}
+          label={m(page.label)}
           labelIcon={page.icon}
           url={page.url}
         >
@@ -62,7 +64,9 @@ function ConfiguredT3ConnectSidebarSignIn() {
         <SidebarMenuItem>
           <SidebarMenuButton onClick={retryClerkLoad}>
             <RotateCwIcon />
-            <span>Retry T3 Connect</span>
+            <span>
+              <T>Retry T3 Connect</T>
+            </span>
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>
@@ -75,7 +79,9 @@ function ConfiguredT3ConnectSidebarSignIn() {
       <SidebarMenuItem>
         <SidebarMenuButton onClick={openAuthPrompt}>
           <LogInIcon />
-          <span>Sign in to T3 Connect</span>
+          <span>
+            <T>Sign in to T3 Connect</T>
+          </span>
         </SidebarMenuButton>
       </SidebarMenuItem>
     </SidebarMenu>
@@ -84,10 +90,15 @@ function ConfiguredT3ConnectSidebarSignIn() {
 
 function SelfHostedAvatar() {
   const { isLoaded, isSignedIn } = useAuth();
+  const gt = useGT();
   if (!isLoaded || !isSignedIn) return null;
   return (
-    <button type="button" aria-label="T3 Connect account" onClick={() => openSelfHostedAccount()}>
-      Account
+    <button
+      type="button"
+      aria-label={gt("T3 Connect account")}
+      onClick={() => openSelfHostedAccount()}
+    >
+      <T>Account</T>
     </button>
   );
 }

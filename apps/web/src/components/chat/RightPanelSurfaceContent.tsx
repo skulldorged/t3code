@@ -1,3 +1,4 @@
+import { useGT } from "gt-react";
 import type {
   EditorId,
   EnvironmentId,
@@ -89,6 +90,7 @@ export function RightPanelSurfaceContent(props: {
   readonly sideChatParentPanel: SideChatParentPanel;
 }) {
   const { surface, threadRef, visible, onCloseSurface } = props;
+  const gt = useGT();
   if (surface === null) return null;
   switch (surface.kind) {
     case "preview":
@@ -131,8 +133,8 @@ export function RightPanelSurfaceContent(props: {
       if (!pullRequest.supported) {
         return (
           <PullRequestsUnavailableState
-            title="Pull requests unavailable"
-            error="Update this environment's T3 Code server to browse pull requests."
+            title={gt("Pull requests unavailable")}
+            error={gt("Update this environment's T3 Code server to browse pull requests.")}
           />
         );
       }
@@ -184,8 +186,8 @@ export function RightPanelSurfaceContent(props: {
       if (!props.issuesSupported) {
         return (
           <PullRequestsUnavailableState
-            title="Issues unavailable"
-            error="Update this environment's T3 Code server to browse issues."
+            title={gt("Issues unavailable")}
+            error={gt("Update this environment's T3 Code server to browse issues.")}
           />
         );
       }
