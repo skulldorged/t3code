@@ -43,11 +43,12 @@ export async function setCrashReportsEnabled(enabled: boolean) {
 if (!crashReportingAvailable) {
   void setCrashReportsEnabled(false);
 } else {
-  // Observe keeps its last configuration across launches; configuring it off while the setting
-  // loads would drop the last session's native crash. Imported lazily so the persistence graph
-  // never runs ahead of the imports `index.ts` orders first.
+  // Observe keeps its last configuration, so configuring it off while the setting loads would drop
+  // the last session's native crash. Metro runs an unsplit `import()` synchronously; the microtask
+  // keeps the persistence graph behind `index.ts`'s ordered imports (GT captures the Intl polyfills).
   const changedSinceLoad = () => latestConfiguration !== 0;
-  void import("../../persistence/imperative")
+  void Promise.resolve()
+    .then(() => import("../../persistence/imperative"))
     .then(({ loadPreferences }) => loadPreferences())
     .then(
       (preferences) =>
