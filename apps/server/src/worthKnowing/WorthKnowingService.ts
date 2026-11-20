@@ -49,8 +49,13 @@ import { makeTranscriptReader } from "./WorthKnowingTranscript.ts";
  * first, as the plugin does. There is no check after the final answer.
  */
 const STEPS_PER_CHECK = 6;
-/** How many recently offered and known topics the prompt lists, as the plugin keeps. */
+/** How many recently offered topics the prompt lists, as the plugin keeps. */
 const TOPICS_IN_PROMPT = 50;
+/**
+ * How many closed topics the prompt lists. Each is one short line, so this keeps
+ * well past the plugin's 50 and a dismissed topic stays avoided for longer.
+ */
+const AVOIDED_TOPICS_IN_PROMPT = 200;
 /** Checks running at once across all threads; each is a provider process or request. */
 const MAX_CONCURRENT_CHECKS = 2;
 /** A check that runs longer than this is abandoned. */
@@ -259,13 +264,14 @@ const make = Effect.gen(function* () {
       (Option.isSome(project) ? project.value.workspaceRoot : null);
     if (cwd === null) return;
 
-    // Oldest first, as the plugin lists them.
+    // Oldest first, as the plugin lists them. A closed topic is listed once, under known.
+    const avoided = yield* store.listKnown(AVOIDED_TOPICS_IN_PROMPT);
+    const avoidedIds = new Set(avoided.map((finding) => finding.id));
     const seen = (yield* store.listRecent(TOPICS_IN_PROMPT))
+      .filter((finding) => !avoidedIds.has(finding.id))
       .map((finding) => finding.learn)
       .toReversed();
-    const known = (yield* store.listKnown(TOPICS_IN_PROMPT))
-      .map((finding) => finding.learn)
-      .toReversed();
+    const known = avoided.map((finding) => finding.learn).toReversed();
 
     const modelSelection = ServerSettings.resolveWorthKnowingModelSelection(
       settings.value,
