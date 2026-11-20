@@ -64,6 +64,11 @@ export function FloatingWorkingControl(props: {
   readonly colorScheme: "light" | "dark";
   readonly status: FloatingWorkingStatus | null;
   readonly extensionStatus?: { readonly label: string; readonly onPress: () => void } | null;
+  /** A finding waiting beside another status, as a bulb that opens it. */
+  readonly worthKnowing?: {
+    readonly accessibilityLabel: string;
+    readonly onPress: () => void;
+  } | null;
   readonly devicePreview: { readonly count: number; readonly onPress: () => void } | null;
   readonly browserPreview: { readonly count: number; readonly onPress: () => void } | null;
   readonly desktopPreview?: { readonly count: number; readonly onPress: () => void } | null;
@@ -83,6 +88,8 @@ export function FloatingWorkingControl(props: {
   const [actionWidth, setActionWidth] = useState(0);
   const [extensionWidth, setExtensionWidth] = useState(0);
   const extensionStatus = props.extensionStatus ?? null;
+  const worthKnowing = props.worthKnowing ?? null;
+  const [worthKnowingWidth, setWorthKnowingWidth] = useState(0);
   const extensionOnly = props.status?.kind === "extension";
   const useGlass = NATIVE_LIQUID_GLASS_SUPPORTED && !extensionOnly;
   const actions: ReadonlyArray<FloatingStatusAction> =
@@ -106,6 +113,7 @@ export function FloatingWorkingControl(props: {
     Math.min(overlayWidth, windowWidth) -
       reservedWidth -
       (actions.length > 0 ? actionWidth : 0) -
+      (worthKnowing !== null ? worthKnowingWidth : 0) -
       (hasQueue ? queueWidth : 0) -
       (hasAgents ? agentsWidth : 0) -
       (hasPreview ? previewWidth : 0),
@@ -178,6 +186,7 @@ export function FloatingWorkingControl(props: {
   const capsuleInteractive =
     statusInteractive ||
     extensionStatus !== null ||
+    worthKnowing !== null ||
     actions.length > 0 ||
     hasQueue ||
     hasAgents ||
@@ -249,6 +258,23 @@ export function FloatingWorkingControl(props: {
             </Fragment>
           ))}
         </View>
+      ) : null}
+      {worthKnowing !== null ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={worthKnowing.accessibilityLabel}
+          onPress={worthKnowing.onPress}
+          onLayout={(event) => setWorthKnowingWidth(settleWidth(event.nativeEvent.layout.width))}
+          className="h-11 flex-row items-center px-3 active:opacity-70"
+        >
+          {hasStatus ? <View className="absolute left-0 h-4 w-px bg-border" /> : null}
+          <SymbolView
+            name="lightbulb"
+            size={13}
+            tintColorClassName="accent-icon-muted"
+            type="monochrome"
+          />
+        </Pressable>
       ) : null}
       {hasPreview ? (
         <View

@@ -841,7 +841,19 @@ function ThreadDetailBody(
   const worthKnowingActions = useWorthKnowingActions(props.environmentId);
   const [worthKnowingSheetFindingId, setWorthKnowingSheetFindingId] =
     useState<WorthKnowingFindingId | null>(null);
-  const floatingStatus = ((): FloatingWorkingStatus | null => {
+  const worthKnowingPill =
+    worthKnowingFinding !== undefined && contentPresentationKind === "ready"
+      ? {
+          label: worthKnowingFinding.title,
+          accessibilityLabel: gt("Worth knowing: {title}", { title: worthKnowingFinding.title }),
+          onPress: () => {
+            Keyboard.dismiss();
+            worthKnowingActions.engage([worthKnowingFinding]);
+            setWorthKnowingSheetFindingId(worthKnowingFinding.id);
+          },
+        }
+      : null;
+  const otherFloatingStatus = ((): FloatingWorkingStatus | null => {
     const connectionStatus = connectionFloatingStatus(
       {
         connectionError: props.connectionError,
@@ -909,19 +921,6 @@ function ThreadDetailBody(
         },
       };
     }
-    if (worthKnowingFinding !== undefined && contentPresentationKind === "ready") {
-      const finding = worthKnowingFinding;
-      return {
-        kind: "worth-knowing",
-        label: finding.title,
-        accessibilityLabel: gt("Worth knowing: {title}", { title: finding.title }),
-        onPress: () => {
-          Keyboard.dismiss();
-          worthKnowingActions.engage([finding]);
-          setWorthKnowingSheetFindingId(finding.id);
-        },
-      };
-    }
     if (props.selectedThread.goal !== null && contentPresentationKind === "ready") {
       const goal = presentProviderGoal(props.selectedThread.goal, false, messages);
       const goalDriver = props.serverConfig?.providers.find(
@@ -960,6 +959,12 @@ function ThreadDetailBody(
     }
     return null;
   })();
+  // A finding takes the pill's label only when nothing else needs it; otherwise it shows as a
+  // bulb beside that status, so it never hides the goal and its actions.
+  const floatingStatus: FloatingWorkingStatus | null =
+    otherFloatingStatus ??
+    (worthKnowingPill === null ? null : { kind: "worth-knowing", ...worthKnowingPill });
+  const worthKnowingBulb = otherFloatingStatus === null ? null : worthKnowingPill;
   const showWorkingControl = floatingStatus !== null;
   const showFloatingStatus =
     showWorkingControl ||
@@ -1737,6 +1742,7 @@ function ThreadDetailBody(
                   <FloatingWorkingControl
                     colorScheme={isDarkMode ? "dark" : "light"}
                     status={floatingStatus}
+                    worthKnowing={worthKnowingBulb}
                     extensionStatus={
                       floatingStatus !== null &&
                       (floatingStatus.kind === "goal" || floatingStatus.kind === "worth-knowing")
