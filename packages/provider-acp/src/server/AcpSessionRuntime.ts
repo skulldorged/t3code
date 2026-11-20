@@ -1510,6 +1510,9 @@ export const make = Effect.fn("AcpSessionRuntime.make")(function* (
         ...(options.spawn.cwd ? { cwd: options.spawn.cwd } : {}),
         ...(spawnEnvironment ? { env: spawnEnvironment } : {}),
         extendEnv: options.spawn.extendEnv ?? true,
+        // Scope cleanup otherwise sends SIGTERM and waits for exit without limit, so an agent
+        // that hangs and ignores SIGTERM (Kimi does) would outlive its session and the server.
+        forceKillAfter: "1 second",
         // Windows `detached` gives the child its own console, which breaks stdio pipes through
         // `.cmd` shims; taskkill /T cleans up the tree there without it.
         ...(options.ownDetachedProcessGroup === undefined
