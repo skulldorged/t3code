@@ -10,13 +10,16 @@ import { WorthKnowingDetails } from "./WorthKnowing";
 function WorthKnowingRecordDetails({
   record,
   environmentId,
+  showTitle,
 }: {
   readonly record: WorthKnowingContextRecord;
   readonly environmentId: EnvironmentId;
+  readonly showTitle: boolean;
 }) {
   return (
-    <div className="max-h-80 overflow-y-auto">
+    <div className="max-h-[min(70vh,40rem)] overflow-y-auto">
       <WorthKnowingDetails
+        showTitle={showTitle}
         finding={record}
         context={{
           environmentId,
@@ -50,8 +53,8 @@ export function WorthKnowingComposerChip({
         <LightbulbIcon aria-hidden />
         <ContextChipLabel>{record.label}</ContextChipLabel>
       </PopoverTrigger>
-      <PopoverPopup side="top" align="start" width="md" padding="compact">
-        <WorthKnowingRecordDetails record={record} environmentId={record.environmentId} />
+      <PopoverPopup side="top" align="start" className="w-[min(28.75rem,calc(100vw-2rem))]">
+        <WorthKnowingRecordDetails record={record} environmentId={record.environmentId} showTitle />
       </PopoverPopup>
     </Popover>
   );
@@ -99,8 +102,12 @@ export function WorthKnowingMessageCard({
             {record.title}
           </span>
         </PopoverTrigger>
-        <PopoverPopup side="bottom" align="start" width="md" padding="compact">
-          <WorthKnowingRecordDetails record={record} environmentId={environmentId} />
+        <PopoverPopup side="bottom" align="start" className="w-[min(28.75rem,calc(100vw-2rem))]">
+          <WorthKnowingRecordDetails
+            record={record}
+            environmentId={environmentId}
+            showTitle={false}
+          />
         </PopoverPopup>
       </Popover>
     </span>

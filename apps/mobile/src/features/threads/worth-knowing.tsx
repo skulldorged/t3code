@@ -105,17 +105,29 @@ function plainText(markdown: string): string {
 export function WorthKnowingFindingDetails(props: {
   readonly finding: Pick<WorthKnowingContextRecord, "learn" | "body" | "evidence">;
 }) {
+  const gt = useGT();
   const { finding } = props;
   return (
     <>
-      <Text selectable className="text-sm text-foreground-secondary">
-        {finding.body.length > 0 ? plainText(finding.body) : finding.learn}
+      <Text selectable className="text-sm leading-relaxed text-foreground">
+        {finding.learn}
       </Text>
-      {finding.evidence === null ? null : (
-        <View className="gap-1 border-l-2 border-border pl-2.5">
-          <Text selectable className="font-mono text-xs text-foreground-secondary">
-            {finding.evidence.quote}
+      {finding.body.length > 0 ? (
+        <View className="gap-1 border-t border-border pt-2.5">
+          <Text className="text-xs text-foreground-tertiary">{gt("Why")}</Text>
+          <Text selectable className="text-sm leading-relaxed text-foreground-secondary">
+            {plainText(finding.body)}
           </Text>
+        </View>
+      ) : null}
+      {finding.evidence === null ? null : (
+        <View className="gap-1 border-t border-border pt-2.5">
+          <Text className="text-xs text-foreground-tertiary">{gt("Source")}</Text>
+          <View className="rounded-md bg-subtle px-2.5 py-2">
+            <Text selectable className="font-mono text-xs text-foreground-secondary">
+              {finding.evidence.quote}
+            </Text>
+          </View>
           {finding.evidence.label === null ? null : (
             <Text className="text-xs text-foreground-tertiary">{finding.evidence.label}</Text>
           )}

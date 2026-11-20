@@ -20,6 +20,7 @@ import { useEnvironmentQuery } from "~/state/query";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { worthKnowing } from "~/state/worthKnowing";
 import ChatMarkdown from "../ChatMarkdown";
+import { ContextChip, ContextChipLabel } from "../ContextChip";
 import { Button, InlineButton } from "../ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import type { ThreadNowItem } from "./ThreadNow";
@@ -75,9 +76,14 @@ export interface WorthKnowingContext {
 }
 
 /** The explanation behind a finding: what it is, why, and the line it points to. */
+/**
+ * A finding as it reads in a popup: the point first, then why, then the source.
+ * Leave out the title where the trigger already shows it.
+ */
 export function WorthKnowingDetails({
   finding,
   context,
+  showTitle = true,
 }: {
   readonly finding: {
     readonly title: string;
@@ -86,36 +92,55 @@ export function WorthKnowingDetails({
     readonly evidence: { readonly quote: string; readonly label: string | null } | null;
   };
   readonly context: WorthKnowingContext;
+  readonly showTitle?: boolean;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1.5 text-sm">
-      <p className="flex min-w-0 items-start gap-2 font-medium text-foreground">
-        <LightbulbIcon aria-hidden className="mt-1 size-3.5 shrink-0 text-muted-foreground" />
-        <span className="min-w-0">{finding.title}</span>
+    <div className="flex min-w-0 flex-col gap-2.5 text-sm">
+      {showTitle ? (
+        <div className="flex min-w-0 flex-col gap-1">
+          <ContextChip kind="worth-knowing" className="text-xs">
+            <LightbulbIcon aria-hidden />
+            <ContextChipLabel>
+              <T>Worth knowing</T>
+            </ContextChipLabel>
+          </ContextChip>
+          <p className="text-base font-semibold leading-snug text-foreground" dir="auto">
+            {finding.title}
+          </p>
+        </div>
+      ) : null}
+      <p className="leading-relaxed text-foreground" dir="auto">
+        {finding.learn}
       </p>
       {finding.body.length > 0 ? (
-        <div className="text-secondary-label">
-          <ChatMarkdown
-            text={finding.body}
-            cwd={context.cwd}
-            environmentId={context.environmentId}
-            threadRef={context.threadRef ?? undefined}
-            isStreaming={false}
-            headingLevelOffset={3}
-          />
-        </div>
-      ) : (
-        <p className="text-secondary-label">{finding.learn}</p>
-      )}
+        <section className="flex min-w-0 flex-col gap-1 border-t border-border pt-2.5">
+          <h4 className="text-xs font-normal text-muted-foreground">
+            <T>Why</T>
+          </h4>
+          <div className="leading-relaxed text-foreground/80 [&_li]:mb-1.5">
+            <ChatMarkdown
+              text={finding.body}
+              cwd={context.cwd}
+              environmentId={context.environmentId}
+              threadRef={context.threadRef ?? undefined}
+              isStreaming={false}
+              headingLevelOffset={3}
+            />
+          </div>
+        </section>
+      ) : null}
       {finding.evidence === null ? null : (
-        <figure className="flex flex-col gap-1 border-l-2 border-border pl-2.5 text-xs">
-          <blockquote className="whitespace-pre-wrap break-words font-mono text-secondary-label">
+        <section className="flex min-w-0 flex-col gap-1 border-t border-border pt-2.5">
+          <h4 className="text-xs font-normal text-muted-foreground">
+            <T>Source</T>
+          </h4>
+          <blockquote className="whitespace-pre-wrap break-words rounded-md bg-muted/50 px-2.5 py-2 font-mono text-xs text-foreground/80">
             {finding.evidence.quote}
           </blockquote>
           {finding.evidence.label === null ? null : (
-            <figcaption className="text-muted-foreground">{finding.evidence.label}</figcaption>
+            <p className="text-xs text-muted-foreground">{finding.evidence.label}</p>
           )}
-        </figure>
+        </section>
       )}
     </div>
   );
@@ -170,9 +195,12 @@ export function useWorthKnowingNowItem(input: {
         <PopoverTrigger openOnHover render={<InlineButton />}>
           {finding.title}
         </PopoverTrigger>
-        <PopoverPopup side="top" align="start" width="md" padding="compact">
-          <div className="max-h-80 overflow-y-auto">
+        <PopoverPopup side="top" align="start" className="w-[min(28.75rem,calc(100vw-2rem))]">
+          <div className="max-h-[min(70vh,40rem)] overflow-y-auto">
             <WorthKnowingDetails finding={finding} context={context} />
+            <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border pt-2.5">
+              <WorthKnowingFindingActions finding={finding} actions={actions} />
+            </div>
           </div>
         </PopoverPopup>
       </Popover>
@@ -232,12 +260,17 @@ export function WorthKnowingReplyButton({
           <span className="tabular-nums">{openFindings.length}</span>
         ) : null}
       </PopoverTrigger>
-      <PopoverPopup side="bottom" align="start" width="md" padding="compact" aria-label={label}>
-        <div className="flex max-h-96 flex-col divide-y divide-border overflow-y-auto">
+      <PopoverPopup
+        side="bottom"
+        align="start"
+        className="w-[min(28.75rem,calc(100vw-2rem))]"
+        aria-label={label}
+      >
+        <div className="flex flex-col divide-y divide-border max-h-[min(70vh,40rem)] overflow-y-auto">
           {openFindings.map((finding) => (
-            <div key={finding.id} className="flex flex-col gap-2 py-2 first:pt-0 last:pb-0">
+            <div key={finding.id} className="flex flex-col gap-2.5 py-3 first:pt-0 last:pb-0">
               <WorthKnowingDetails finding={finding} context={context} />
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border pt-2.5">
                 <WorthKnowingFindingActions finding={finding} actions={actions} />
               </div>
             </div>
