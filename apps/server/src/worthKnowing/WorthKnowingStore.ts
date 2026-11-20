@@ -48,7 +48,7 @@ export class WorthKnowingStore extends Context.Service<
     readonly listRecent: (
       limit: number,
     ) => Effect.Effect<ReadonlyArray<WorthKnowingFinding>, WorthKnowingError>;
-    /** Topics the user knew or took to the agent, in any thread, newest first. */
+    /** Topics the user dismissed, knew or took to the agent, in any thread, newest first. */
     readonly listKnown: (
       limit: number,
     ) => Effect.Effect<ReadonlyArray<WorthKnowingFinding>, WorthKnowingError>;
@@ -172,7 +172,7 @@ const make = Effect.gen(function* () {
   const listKnown: WorthKnowingStore["Service"]["listKnown"] = (limit) =>
     sql<FindingRow>`
       SELECT payload_json, engaged FROM worth_knowing_findings
-      WHERE status IN ('known', 'discussed')
+      WHERE status IN ('dismissed', 'known', 'discussed')
       ORDER BY created_at DESC
       LIMIT ${limit}
     `.pipe(

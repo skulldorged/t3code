@@ -9,7 +9,7 @@ export function buildWorthKnowingPrompt(input: {
   readonly transcript: string;
   /** Learn lines of the findings offered most recently, in any thread. */
   readonly seen: ReadonlyArray<string>;
-  /** Learn lines of topics the user knew already or took to the agent. */
+  /** Learn lines of topics the user dismissed, knew already or took to the agent. */
   readonly known: ReadonlyArray<string>;
 }): string {
   const question = CLAUDE_YOU_SHOULD_KNOW_PROMPT.replace("{{SEEN}}", () =>
@@ -49,7 +49,7 @@ Here’s an example of the context you’ll be working in. NOTE: this is what sh
 
 Heads up · The main agent chose to add prompt caching to multi-turn /ask, but it could end up being more expensive for the user.
 
-Explain   Ask agent   Knew this   Dismiss
+Explain   Ask agent   Dismiss
 
 *If the user chooses “Explain,” they might see:*  
 **One-off /ask questions now cost more**
@@ -61,7 +61,7 @@ Explain   Ask agent   Knew this   Dismiss
 * However, a one-off question pays 1.25x to save and never gets the discount, so users asking only one-off questions will spend **25% more** than today on /ask.  
 * The main agent decided this tradeoff was worth it, but **consider monitoring how often people ask follow-ups** before shipping.
 
-Ask agent   Knew this   Dismiss
+Ask agent   Dismiss
 
 ## Output structure
 
@@ -102,7 +102,7 @@ Length: 1-2 sentences, about 20 words. Always end with a period. If 1 sentence, 
 These are the last suggestions offered to the user. You should skip them:
 {{SEEN}}
 
-The person said they already understood these topics, so make sure to avoid offering them:
+The person dismissed these topics, already understood them, or took them to the agent, so make sure to avoid offering them:
 {{KNOWN}}
 
 #### Suggesting nothing

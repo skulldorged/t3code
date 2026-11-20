@@ -135,9 +135,6 @@ function WorthKnowingFindingActions({
           <T>Ask agent</T>
         </InlineButton>
       )}
-      <InlineButton tone="muted" onClick={() => actions.update(finding, "known")}>
-        <T>Knew this</T>
-      </InlineButton>
       <InlineButton tone="muted" onClick={() => actions.update(finding, "dismiss")}>
         <T>Dismiss</T>
       </InlineButton>

@@ -154,7 +154,7 @@ function OpenFinding(props: {
   readonly finding: WorthKnowingFinding;
   readonly canAsk: boolean;
   readonly onAsk: () => void;
-  readonly onAnswer: (action: "known" | "dismiss") => void;
+  readonly onDismiss: () => void;
 }) {
   const gt = useGT();
   const { finding } = props;
@@ -171,8 +171,7 @@ function OpenFinding(props: {
       <WorthKnowingFindingDetails finding={finding} />
       <View className="flex-row flex-wrap items-center gap-x-4 gap-y-2 pt-0.5">
         {props.canAsk ? <TextAction label={gt("Ask agent")} onPress={props.onAsk} /> : null}
-        <TextAction muted label={gt("Knew this")} onPress={() => props.onAnswer("known")} />
-        <TextAction muted label={gt("Dismiss")} onPress={() => props.onAnswer("dismiss")} />
+        <TextAction muted label={gt("Dismiss")} onPress={props.onDismiss} />
       </View>
     </View>
   );
@@ -240,8 +239,8 @@ export function WorthKnowingSheet(props: {
                 props.onClose();
                 actions.askAgent(finding);
               }}
-              onAnswer={(action) => {
-                actions.update(finding, action);
+              onDismiss={() => {
+                actions.update(finding, "dismiss");
                 // The single finding has nothing left to show once answered.
                 if (props.findingId !== undefined) props.onClose();
               }}
