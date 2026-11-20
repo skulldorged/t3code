@@ -46,7 +46,7 @@ import {
   resolveDraftHeroState,
   threadErrorIsServerRuntime,
 } from "./ChatView.logic";
-import { useWorthKnowingBannerItems } from "./chat/WorthKnowingBanner";
+import { useWorthKnowingNowItem } from "./chat/WorthKnowing";
 import { useQueuedRunEdit } from "./chat/useQueuedRunEdit";
 import { recallCheckoutIsRepo, rememberCheckoutIsRepo } from "./ChatView.logic";
 import { useLogicalProjectEnvironments } from "../hooks/useLogicalProjectEnvironments";
@@ -2736,15 +2736,11 @@ export default function ChatView(props: ChatViewProps) {
           messages,
         )
       : null;
-  const worthKnowingBannerItems = useWorthKnowingBannerItems({
+  const worthKnowingNow = useWorthKnowingNowItem({
     environmentId,
     threadId: isServerThread ? (activeThread?.id ?? null) : null,
-    // A run that ended without a final answer has no card to hold its findings.
-    settledRunId:
-      phase !== "running" && (activeThreadShell?.latestRun?.assistantMessageId ?? null) !== null
-        ? (activeThreadShell?.latestRun?.runId ?? null)
-        : null,
     composerTarget: typeof composerDraftTarget === "string" ? null : composerDraftTarget,
+    cwd: gitCwd ?? undefined,
   });
   const composerBannerItems = (() => {
     const fallbackSelection = draftFallback?.selection;
@@ -2812,7 +2808,6 @@ export default function ChatView(props: ChatViewProps) {
         ...feedbackBannerItems,
         ...fallbackItems,
         ...limitRecoveryItems,
-        ...worthKnowingBannerItems,
         ...extensionStatusItems,
         ...usageLimitsItems,
         ...projectCloneItems,
@@ -2824,7 +2819,6 @@ export default function ChatView(props: ChatViewProps) {
       ...feedbackBannerItems,
       ...fallbackItems,
       ...limitRecoveryItems,
-      ...worthKnowingBannerItems,
       ...extensionStatusItems,
       ...usageLimitsItems,
       ...projectCloneItems,
@@ -3285,7 +3279,11 @@ export default function ChatView(props: ChatViewProps) {
 
   const shownThreadSyncPhase = activeEnvironmentUnavailable ? null : delayedThreadSyncPhase;
   const hasThreadNow =
-    attentionNow !== null || workNow !== null || goalNow !== null || shownThreadSyncPhase !== null;
+    attentionNow !== null ||
+    worthKnowingNow !== null ||
+    workNow !== null ||
+    goalNow !== null ||
+    shownThreadSyncPhase !== null;
   const queuedRunCount = serverProjection ? getUserQueuedThreadRuns(serverProjection).length : 0;
   // The queue control is mounted for every server thread but joins the footer only while it shows
   // something, by its own rule: an optimistic message stops counting once the server has it.
@@ -3329,6 +3327,7 @@ export default function ChatView(props: ChatViewProps) {
         <ThreadNow
           key={routeThreadKey}
           attention={attentionNow}
+          worthKnowing={worthKnowingNow}
           work={workNow}
           syncPhase={shownThreadSyncPhase}
           goal={goalNow}

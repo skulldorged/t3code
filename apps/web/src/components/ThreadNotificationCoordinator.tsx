@@ -42,7 +42,6 @@ import {
   type ThreadNotificationObservation,
 } from "./ThreadNotificationCoordinator.logic";
 import { toastManager } from "./ui/toast";
-import { watchWorthKnowingNotifications } from "./WorthKnowingNotifications";
 
 interface NotificationState extends ThreadNotificationObservation {
   readonly raw: OrchestrationV2ThreadShell;
@@ -352,17 +351,10 @@ export function startThreadNotifications(
       environmentThreadShells.delegatedUnderParentAtom,
       reobserve,
     );
-    const unsubscribeWorthKnowing = watchWorthKnowingNotifications(
-      registry,
-      router,
-      environmentId,
-      trackNotification,
-    );
     entry.unsubscribe = () => {
       unsubscribeShell();
       unsubscribeRequests();
       unsubscribeDelegated();
-      unsubscribeWorthKnowing();
       entry.gate.clear();
     };
     return entry;

@@ -34,16 +34,13 @@ export function createWorthKnowingAtoms<R, E>(
 }
 
 /**
- * The open finding to show above the composer. Like Claude Code's plugin, a
- * finding waits there until the user answers it or passes it over, except
- * while the card under its run's final answer is the last thing in the
- * thread: pass that run as `settledRunId`. Findings are newest first.
+ * The finding at the end of the timeline: the newest open one, whatever run
+ * raised it. Findings are newest first.
  */
-export function worthKnowingComposerFinding(
+export function worthKnowingCurrentFinding(
   findings: ReadonlyArray<WorthKnowingFinding>,
-  settledRunId: string | null,
 ): WorthKnowingFinding | undefined {
-  return findings.find((finding) => finding.status === "open" && finding.runId !== settledRunId);
+  return findings.find((finding) => finding.status === "open");
 }
 
 /** How a closed finding was closed, after its title. */
@@ -62,7 +59,7 @@ export function worthKnowingClosedLabel(status: WorthKnowingFindingStatus): stri
   }
 }
 
-/** Findings shown in a run's card: open ones first, then those the user can still restore. */
+/** One run's findings, open and closed, for its final answer's action row. */
 export function worthKnowingFindingsForRun(
   findings: ReadonlyArray<WorthKnowingFinding>,
   runId: string,

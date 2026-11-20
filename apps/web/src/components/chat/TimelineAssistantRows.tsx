@@ -23,7 +23,7 @@ import {
   useQuietThreadShell,
 } from "../../state/entities";
 import { MessageCopyButton } from "./MessageCopyButton";
-import { WorthKnowingRunCard } from "./WorthKnowingCard";
+import { useThreadWorthKnowing, WorthKnowingReplyButton } from "./WorthKnowing";
 import { AssistantCitationSource } from "./AssistantCitationSource";
 import { resolveAssistantMessageCopyState } from "./MessagesTimeline.logic";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -105,9 +105,6 @@ export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind
             showCopyButton={row.showAssistantCopyButton}
             copyStreaming={row.assistantCopyStreaming}
           />
-        ) : null}
-        {row.showAssistantMeta ? (
-          <RunWorthKnowing projectedItem={row.projectedItem} message={row.message} />
         ) : null}
       </div>
     </>
@@ -214,30 +211,7 @@ export function AssistantMetaTimelineRow({
         copyStreaming={row.assistantCopyStreaming}
         alwaysVisible
       />
-      <RunWorthKnowing projectedItem={row.projectedItem} message={row.message} />
     </div>
-  );
-}
-
-/** What the observer flagged about the run this final answer ends. */
-function RunWorthKnowing({
-  projectedItem,
-  message,
-}: {
-  projectedItem?: Extract<TimelineRow, { kind: "message" }>["projectedItem"];
-  message: ChatMessage;
-}) {
-  const ctx = use(TimelineRowCtx);
-  const threadId = projectedItem?.sourceThreadId ?? ctx.threadRef?.threadId;
-  if (message.runId === null || threadId === undefined) return null;
-  return (
-    <WorthKnowingRunCard
-      environmentId={ctx.activeThreadEnvironmentId}
-      threadId={threadId}
-      runId={message.runId}
-      threadRef={ctx.threadRef}
-      cwd={ctx.markdownCwd}
-    />
   );
 }
 
@@ -258,12 +232,18 @@ function AssistantMessageMeta({
 }) {
   const ctx = use(TimelineRowCtx);
   const m = useMessages();
+  const worthKnowingThreadId = projectedItem?.sourceThreadId ?? ctx.threadRef?.threadId ?? null;
+  const findings = useThreadWorthKnowing(ctx.activeThreadEnvironmentId, worthKnowingThreadId);
+  // A reply with something still worth knowing keeps its row in view, so the bulb shows.
+  const hasOpenFinding = findings.some(
+    (finding) => finding.runId === message.runId && finding.status === "open",
+  );
 
   return (
     <div
       className={cn(
         "flex items-center gap-2 text-xs tabular-nums transition-opacity duration-200",
-        alwaysVisible
+        alwaysVisible || hasOpenFinding
           ? "opacity-100"
           : "opacity-0 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover/assistant:opacity-100",
         className,
@@ -282,6 +262,15 @@ function AssistantMessageMeta({
       ) : null}
       {!message.streaming && projectedItem ? (
         <AssistantReplyButton message={message} itemId={projectedItem.sourceItemId} />
+      ) : null}
+      {!message.streaming && message.runId !== null && worthKnowingThreadId !== null ? (
+        <WorthKnowingReplyButton
+          environmentId={ctx.activeThreadEnvironmentId}
+          threadId={worthKnowingThreadId}
+          runId={message.runId}
+          threadRef={ctx.threadRef}
+          cwd={ctx.markdownCwd}
+        />
       ) : null}
       {!message.streaming && (
         <Tooltip>

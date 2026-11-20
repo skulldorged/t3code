@@ -29,6 +29,12 @@ export type FloatingWorkingStatus =
       readonly accessibilityLabel: string;
       readonly actions: ReadonlyArray<FloatingStatusAction>;
     }
+  | {
+      readonly kind: "worth-knowing";
+      readonly label: string;
+      readonly accessibilityLabel: string;
+      readonly onPress: () => void;
+    }
   | { readonly kind: "extension"; readonly label: string; readonly onPress: () => void }
   | { readonly kind: "preparing"; readonly label: string }
   | {

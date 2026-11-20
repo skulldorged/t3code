@@ -51,6 +51,7 @@ import type {
   ServerConfig as T3ServerConfig,
   UsageLimitsReport,
   RunId,
+  WorthKnowingFindingId,
 } from "@t3tools/contracts";
 import {
   appendCodexArtifactTemplateUsePrompt,
@@ -72,6 +73,7 @@ import {
   presentProviderGoal,
 } from "@t3tools/client-runtime/state/thread-execution";
 import { resolveSubagentPillSegment } from "@t3tools/client-runtime/state/thread-subagents";
+import { worthKnowingCurrentFinding } from "@t3tools/client-runtime/state/worth-knowing";
 import {
   formatModelSelectionEffort,
   type ProviderSubagentStatus,
@@ -187,9 +189,10 @@ import { PendingApprovalCard } from "./PendingApprovalCard";
 import { ComposerErrorNotice } from "./ComposerErrorNotice";
 import {
   useRegisterWorthKnowingAsk,
-  settledRunId,
-  WorthKnowingLiveCard,
-} from "./worth-knowing-card";
+  useThreadWorthKnowing,
+  useWorthKnowingActions,
+  WorthKnowingSheet,
+} from "./worth-knowing";
 import { ManagedRuntimeModeNotice } from "./ManagedRuntimeModeNotice";
 import { FreshSessionNotice } from "./FreshSessionNotice";
 import { ComposerFeedback } from "./ComposerFeedback";
@@ -832,6 +835,12 @@ function ThreadDetailBody(
     };
   })();
   const statusLines = [backgroundLine, lifecycleLine].filter((line) => line !== null);
+  const worthKnowingFinding = worthKnowingCurrentFinding(
+    useThreadWorthKnowing(props.environmentId, props.selectedThread.id),
+  );
+  const worthKnowingActions = useWorthKnowingActions(props.environmentId);
+  const [worthKnowingSheetFindingId, setWorthKnowingSheetFindingId] =
+    useState<WorthKnowingFindingId | null>(null);
   const floatingStatus = ((): FloatingWorkingStatus | null => {
     const connectionStatus = connectionFloatingStatus(
       {
@@ -897,6 +906,19 @@ function ThreadDetailBody(
         onPress: () => {
           Keyboard.dismiss();
           openLinkedThread({ environmentId: childInput.environmentId, threadId: childInput.id });
+        },
+      };
+    }
+    if (worthKnowingFinding !== undefined && contentPresentationKind === "ready") {
+      const finding = worthKnowingFinding;
+      return {
+        kind: "worth-knowing",
+        label: finding.title,
+        accessibilityLabel: gt("Worth knowing: {title}", { title: finding.title }),
+        onPress: () => {
+          Keyboard.dismiss();
+          worthKnowingActions.engage([finding]);
+          setWorthKnowingSheetFindingId(finding.id);
         },
       };
     }
@@ -1704,11 +1726,20 @@ function ThreadDetailBody(
                 pushes the resting content floor up by the same amount. */}
               <View onLayout={handleComposerOverlayLayout} className="w-full">
                 <View className="w-full self-center" style={{ maxWidth: contentMaxWidth }}>
+                  {worthKnowingSheetFindingId !== null ? (
+                    <WorthKnowingSheet
+                      environmentId={props.environmentId}
+                      threadId={props.selectedThread.id}
+                      findingId={worthKnowingSheetFindingId}
+                      onClose={() => setWorthKnowingSheetFindingId(null)}
+                    />
+                  ) : null}
                   <FloatingWorkingControl
                     colorScheme={isDarkMode ? "dark" : "light"}
                     status={floatingStatus}
                     extensionStatus={
-                      floatingStatus !== null && floatingStatus.kind === "goal"
+                      floatingStatus !== null &&
+                      (floatingStatus.kind === "goal" || floatingStatus.kind === "worth-knowing")
                         ? extensionStatus
                         : null
                     }
@@ -1781,11 +1812,6 @@ function ThreadDetailBody(
                       key={props.selectedThread.latestRun?.runId}
                       thread={props.selectedThread}
                       environmentId={props.environmentId}
-                    />
-                    <WorthKnowingLiveCard
-                      environmentId={props.environmentId}
-                      threadId={props.selectedThread.id}
-                      settledRunId={settledRunId(props.selectedThread.latestRun)}
                     />
                     <ChildThreadApprovals
                       threadRef={props.selectedThreadDetailRef}

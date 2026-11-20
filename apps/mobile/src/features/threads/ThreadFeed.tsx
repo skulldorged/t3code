@@ -40,7 +40,7 @@ import {
   ThreadHandoffRow,
   ThreadModelSwitchDivider,
 } from "./thread-handoff-row";
-import { WorthKnowingRunCard } from "./worth-knowing-card";
+import { WorthKnowingReplyButton } from "./worth-knowing";
 import { GuestBubbleTint, GuestMessageName } from "./guestMessageStyle";
 import { ThreadGuestPendingMessage, useThreadGuestShare } from "./ThreadGuestShareBar";
 import { LinkRequestCard } from "./LinkRequestCard";
@@ -2776,17 +2776,20 @@ function renderFeedEntry(
                 sourceTitle={props.threadTitle}
               />
             ) : null}
+            {message.runId ? (
+              <WorthKnowingReplyButton
+                environmentId={props.environmentId}
+                threadId={message.projectedItem?.sourceThreadId ?? props.threadId}
+                runId={message.runId}
+                iconColor={iconSubtleColor}
+                buttonSize={props.replyActionSize.button}
+                iconSize={props.replyActionSize.icon}
+              />
+            ) : null}
             <Text className="font-t3-medium text-xs tabular-nums text-foreground-secondary">
               {timestampLabel}
             </Text>
           </View>
-        ) : null}
-        {showAssistantMeta && message.runId ? (
-          <WorthKnowingRunCard
-            environmentId={props.environmentId}
-            threadId={message.projectedItem?.sourceThreadId ?? props.threadId}
-            runId={message.runId}
-          />
         ) : null}
       </Animated.View>
     );

@@ -1,15 +1,14 @@
 import type { EnvironmentId, ThreadId, WorthKnowingThreadSummary } from "@t3tools/contracts";
 import { LightbulbIcon } from "lucide-react";
 
-import { cn } from "~/lib/utils";
 import { useEnvironmentQuery } from "~/state/query";
 import { worthKnowing } from "~/state/worthKnowing";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
 const EMPTY_SUMMARIES: ReadonlyArray<WorthKnowingThreadSummary> = [];
 
-/** One environment's open-finding summaries, shared by every row and the notifier. */
-export function useWorthKnowingSummaries(
+/** One environment's open-finding summaries, shared by every sidebar row. */
+function useWorthKnowingSummaries(
   environmentId: EnvironmentId | null,
 ): ReadonlyArray<WorthKnowingThreadSummary> {
   const query = useEnvironmentQuery(
@@ -18,10 +17,7 @@ export function useWorthKnowingSummaries(
   return query.data?.summaries ?? EMPTY_SUMMARIES;
 }
 
-/**
- * Marks a thread whose observer raised something since the user last looked.
- * Heads-up findings get the warning tint.
- */
+/** Marks a thread whose observer raised something since the user last looked. */
 export function WorthKnowingSidebarMarker(props: {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
@@ -38,15 +34,8 @@ export function WorthKnowingSidebarMarker(props: {
   ) {
     return null;
   }
-  const headsUp = summary.headsUpCount > 0;
   const label =
-    summary.openCount === 1
-      ? headsUp
-        ? "Heads up: 1 thing worth knowing"
-        : "1 thing worth knowing"
-      : headsUp
-        ? `Heads up: ${summary.openCount} things worth knowing`
-        : `${summary.openCount} things worth knowing`;
+    summary.openCount === 1 ? "1 thing worth knowing" : `${summary.openCount} things worth knowing`;
   return (
     <Tooltip>
       <TooltipTrigger
@@ -59,10 +48,7 @@ export function WorthKnowingSidebarMarker(props: {
           />
         }
       >
-        <LightbulbIcon
-          aria-hidden
-          className={cn("size-3.5", headsUp ? "text-warning" : "text-muted-foreground/80")}
-        />
+        <LightbulbIcon aria-hidden className="size-3.5 text-muted-foreground/80" />
       </TooltipTrigger>
       <TooltipPopup side="top">{label}</TooltipPopup>
     </Tooltip>

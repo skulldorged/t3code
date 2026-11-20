@@ -69,17 +69,19 @@ function ThreadSyncLine({ phase }: { readonly phase: ThreadSyncPhase }) {
 }
 
 /**
- * What the thread is doing now, at the end of the timeline: what needs you, background work,
- * the sync status while messages load, then the goal.
+ * What the thread is doing now, at the end of the timeline: what needs you, what the observer
+ * thinks is worth knowing, background work, the sync status while messages load, then the goal.
  */
 export function ThreadNow({
   attention,
+  worthKnowing,
   work,
   syncPhase,
   goal,
 }: {
   /** Something that needs you elsewhere, such as a subagent's question. */
   readonly attention: ThreadNowItem | null;
+  readonly worthKnowing?: ThreadNowItem | null;
   readonly work: ThreadNowItem | null;
   readonly syncPhase: ThreadSyncPhase | null;
   readonly goal: ThreadNowItem | null;
@@ -87,6 +89,7 @@ export function ThreadNow({
   return (
     <>
       {attention ? <ThreadNowLine item={attention} announce /> : null}
+      {worthKnowing ? <ThreadNowLine item={worthKnowing} /> : null}
       {work ? <ThreadNowLine item={work} /> : null}
       {syncPhase ? <ThreadSyncLine phase={syncPhase} /> : null}
       {goal ? <ThreadNowLine item={goal} /> : null}
