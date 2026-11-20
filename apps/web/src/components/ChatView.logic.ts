@@ -41,6 +41,7 @@ import {
   type ScopedThreadRef,
   type ThreadContextRecord,
   type EnvironmentContextRecord,
+  type WorthKnowingContextRecord,
   type ResponseContextRecord,
   type ThreadId,
   type ThreadLinkedPullRequest,
@@ -1347,6 +1348,7 @@ export interface ComposerSendContents {
   readonly reviewComments: ReadonlyArray<ReviewCommentContext>;
   readonly threadContexts: ReadonlyArray<ThreadContextRecord>;
   readonly environmentContexts: ReadonlyArray<EnvironmentContextRecord>;
+  readonly worthKnowingContexts?: ReadonlyArray<WorthKnowingContextRecord>;
   /** The response the message replies to. `prompt` already leads with its reference. */
   readonly replyTo: ResponseContextRecord | null;
 }
@@ -1377,6 +1379,7 @@ export function snapshotComposerSend(contents: ComposerSendContents) {
     reviewComments: [...contents.reviewComments],
     threadContexts: [...contents.threadContexts],
     environmentContexts: [...contents.environmentContexts],
+    worthKnowingContexts: [...(contents.worthKnowingContexts ?? [])],
     replyTo: contents.replyTo,
     messageText,
     /** What a failed send puts back in the composer: the reply returns above it, not in the text. */

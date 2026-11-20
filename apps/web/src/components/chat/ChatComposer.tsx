@@ -32,6 +32,7 @@ import type {
   PreviewAnnotationPayload,
   ThreadContextRecord,
   EnvironmentContextRecord,
+  WorthKnowingContextRecord,
   ResolvedKeybindingsConfig,
   RuntimeMode,
   RuntimeRequestId,
@@ -345,6 +346,7 @@ export interface ChatComposerHandle {
     reviewComments: ReviewCommentContext[];
     threadContexts: ThreadContextRecord[];
     environmentContexts: EnvironmentContextRecord[];
+    worthKnowingContexts: WorthKnowingContextRecord[];
     selectedPromptEffort: string | null;
     selectedModelSelection: ModelSelection;
     multipleModelSelections: ReadonlyArray<ModelSelection> | null;
@@ -708,6 +710,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const composerReviewComments = composerDraft.reviewComments;
   const composerThreadContexts = attachmentDraft.threadContexts;
   const composerEnvironmentContexts = composerDraft.environmentContexts;
+  const composerWorthKnowingContexts = composerDraft.worthKnowingContexts;
   const {
     pendingSnapShotAnimations,
     pendingSnapShotIds,
@@ -766,6 +769,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     previewAnnotations: composerPreviewAnnotations,
     threadContexts: composerThreadContexts,
     environmentContexts: composerEnvironmentContexts,
+    worthKnowingContexts: composerWorthKnowingContexts,
     images: composerImages,
     files: composerFiles,
     uploadsByImageId,
@@ -1126,7 +1130,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       composerPreviewAnnotations.length +
       composerReviewComments.length +
       composerThreadContexts.length +
-      composerEnvironmentContexts.length,
+      composerEnvironmentContexts.length +
+      composerWorthKnowingContexts.length,
   });
   const composerTriggerKind = composerTrigger?.kind ?? null;
   const compactSlashCommandAvailable =
@@ -1316,6 +1321,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const setComposerDraftEnvironmentContexts = useComposerDraftStore(
     (store) => store.setEnvironmentContexts,
   );
+  const setComposerDraftWorthKnowingContexts = useComposerDraftStore(
+    (store) => store.setWorthKnowingContexts,
+  );
   const buildContextClipboardFragment = (contextIds: ReadonlyArray<string>): string | null => {
     const wanted = new Set(contextIds);
     const copiedFiles = new Map<string, File>();
@@ -1333,6 +1341,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         .map(terminalContextRecord),
       ...composerThreadContexts.filter((record) => wanted.has(record.contextId)),
       ...composerEnvironmentContexts.filter((record) => wanted.has(record.contextId)),
+      ...composerWorthKnowingContexts.filter((record) => wanted.has(record.contextId)),
       ...composerReviewComments
         .filter((c) => wanted.has(reviewCommentContextId(c.id)))
         .map(reviewCommentContextRecord),
@@ -1700,6 +1709,28 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       restoredEnvironments.length > 0
     ) {
       setComposerDraftEnvironmentContexts(composerDraftTarget, nextEnvironments);
+    }
+
+    const liveWorthKnowingIds = new Set<string>(
+      composerWorthKnowingContexts.map((record) => record.contextId),
+    );
+    const restoredWorthKnowing = [...referenced].flatMap((contextId) => {
+      if (liveWorthKnowingIds.has(contextId)) return [];
+      const record = retained.worthKnowing.get(contextId);
+      return record ? [record] : [];
+    });
+    const nextWorthKnowing = [
+      ...composerWorthKnowingContexts.filter((record) => referenced.has(record.contextId)),
+      ...restoredWorthKnowing,
+    ];
+    for (const record of composerWorthKnowingContexts) {
+      if (!referenced.has(record.contextId)) retained.worthKnowing.set(record.contextId, record);
+    }
+    if (
+      nextWorthKnowing.length !== composerWorthKnowingContexts.length ||
+      restoredWorthKnowing.length > 0
+    ) {
+      setComposerDraftWorthKnowingContexts(composerDraftTarget, nextWorthKnowing);
     }
 
     for (const comment of composerReviewComments) {
@@ -2413,6 +2444,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       setComposerDraftPrompt,
       setComposerDraftThreadContexts,
       setComposerDraftEnvironmentContexts,
+      setComposerDraftWorthKnowingContexts,
       setComposerCursor,
       setComposerTrigger,
       setComposerHighlightedItemId,
@@ -2563,6 +2595,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       composerReviewComments.length === 0 &&
       composerThreadContexts.length === 0 &&
       composerEnvironmentContexts.length === 0 &&
+      composerWorthKnowingContexts.length === 0 &&
       replyTo === null,
     sideChat: props.sideChatAvailable === true || (props.sideChatDisabledReason ?? null) !== null,
     usageLimits: props.onUsageLimitsCommand !== undefined,
@@ -3290,6 +3323,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         reviewComments: composerReviewComments,
         threadContexts: composerThreadContexts,
         environmentContexts: composerEnvironmentContexts,
+        worthKnowingContexts: composerWorthKnowingContexts,
         selectedPromptEffort,
         selectedModelSelection,
         multipleModelSelections:
@@ -3345,6 +3379,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       composerReviewComments,
       composerThreadContexts,
       composerEnvironmentContexts,
+      composerWorthKnowingContexts,
       focusComposer,
       environmentId,
       primaryEnvironmentId,

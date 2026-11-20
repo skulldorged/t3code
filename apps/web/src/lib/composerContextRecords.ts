@@ -12,6 +12,7 @@ import type {
   ComposerContextId,
   ComposerContextRecord,
   EnvironmentContextRecord,
+  WorthKnowingContextRecord,
   EnvironmentId,
   FileContextRecord,
   ImageContextRecord,
@@ -381,6 +382,13 @@ export function environmentContextRecord(
   };
 }
 
+/** One record per finding: asking about the same finding twice reuses the chip. */
+export function worthKnowingContextReference(
+  record: WorthKnowingContextRecord,
+): ComposerContextReference {
+  return { kind: "worth-knowing", contextId: record.contextId, label: record.label };
+}
+
 export function terminalContextRecord(context: TerminalContextDraft): TerminalContextRecord {
   return {
     version: 1,
@@ -529,6 +537,7 @@ export function buildMessageContext(input: {
   previewAnnotations: ReadonlyArray<PreviewAnnotationPayload>;
   threadContexts?: ReadonlyArray<ThreadContextRecord>;
   environmentContexts?: ReadonlyArray<EnvironmentContextRecord>;
+  worthKnowingContexts?: ReadonlyArray<WorthKnowingContextRecord>;
   replyTo?: ResponseContextRecord | null;
   attachments?: ReadonlyArray<BoundComposerAttachment>;
 }): OrchestrationMessageContext | undefined {
@@ -542,6 +551,7 @@ export function buildMessageContext(input: {
     ...input.reviewComments.map(reviewCommentContextRecord),
     ...(input.threadContexts ?? []),
     ...(input.environmentContexts ?? []),
+    ...(input.worthKnowingContexts ?? []),
     ...(input.replyTo ? [input.replyTo] : []),
     ...input.previewAnnotations.map((annotation) =>
       previewAnnotationContextRecord(annotation, {

@@ -1,6 +1,6 @@
 import {
-  worthKnowingAgentPrompt,
   worthKnowingClosedLabel,
+  worthKnowingContextRecord,
   worthKnowingCurrentFinding,
   worthKnowingFindingsForRun,
 } from "@t3tools/client-runtime/state/worth-knowing";
@@ -58,13 +58,9 @@ function useWorthKnowingActions(
   };
   const askAgent = (finding: WorthKnowingFinding) => {
     if (composerTarget === null) return;
-    const store = useComposerDraftStore.getState();
-    const current = store.getComposerDraft(composerTarget)?.prompt ?? "";
-    const prompt = worthKnowingAgentPrompt(finding);
-    store.setPrompt(
-      composerTarget,
-      current.trim().length === 0 ? prompt : `${current.trimEnd()}\n\n${prompt}`,
-    );
+    useComposerDraftStore
+      .getState()
+      .addWorthKnowingContexts(composerTarget, [worthKnowingContextRecord(environmentId, finding)]);
     update(finding, "ask");
   };
   return { update, askAgent: composerTarget === null ? null : askAgent };
@@ -72,18 +68,23 @@ function useWorthKnowingActions(
 
 type WorthKnowingActions = ReturnType<typeof useWorthKnowingActions>;
 
-interface WorthKnowingContext {
+export interface WorthKnowingContext {
   readonly environmentId: EnvironmentId;
   readonly threadRef: ScopedThreadRef | null;
   readonly cwd: string | undefined;
 }
 
 /** The explanation behind a finding: what it is, why, and the line it points to. */
-function WorthKnowingDetails({
+export function WorthKnowingDetails({
   finding,
   context,
 }: {
-  readonly finding: WorthKnowingFinding;
+  readonly finding: {
+    readonly title: string;
+    readonly learn: string;
+    readonly body: string;
+    readonly evidence: { readonly quote: string; readonly label: string | null } | null;
+  };
   readonly context: WorthKnowingContext;
 }) {
   return (

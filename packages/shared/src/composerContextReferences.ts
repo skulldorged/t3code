@@ -368,6 +368,21 @@ function formatComposerContextProviderPayload(record: KnownComposerContextRecord
       );
       return lines.join("\n");
     }
+    case "worth-knowing": {
+      const lines = [
+        "T3's Worth knowing observer, which reads this thread alongside you, raised this. The user is asking you about it; if they wrote nothing else, say whether it is right and what to do.",
+        `title: ${record.title}`,
+        `note: ${record.learn}`,
+      ];
+      if (record.body.trim()) lines.push("explanation:", indent(record.body.trim()));
+      if (record.evidence !== null) {
+        lines.push(
+          record.evidence.label === null ? "source:" : `source (${record.evidence.label}):`,
+          indent(record.evidence.quote),
+        );
+      }
+      return lines.join("\n");
+    }
     case "environment":
       return [
         `label: ${record.label}`,

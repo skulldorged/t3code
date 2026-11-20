@@ -33,6 +33,7 @@ import { AppText as Text } from "./ui/AppText";
 import { Sheet } from "./ui/Sheet";
 import { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
 import { getMobileTerminalTheme } from "../features/terminal/terminalTheme";
+import { WorthKnowingFindingDetails } from "../features/threads/worth-knowing";
 
 function ContextField(props: {
   label: string;
@@ -391,6 +392,11 @@ export function ComposerContextSheet(props: {
             ) : null}
             {record.kind === "environment" ? (
               <ContextField label={gt("Machine", { $context: "computer" })} value={record.label} />
+            ) : null}
+            {record.kind === "worth-knowing" ? (
+              <View className="gap-2">
+                <WorthKnowingFindingDetails finding={record} />
+              </View>
             ) : null}
             {record.kind === "skill" ? (
               <View className="gap-3">

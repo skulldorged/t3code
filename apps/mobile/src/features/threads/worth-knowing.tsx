@@ -1,12 +1,13 @@
 import {
-  worthKnowingAgentPrompt,
   worthKnowingClosedLabel,
+  worthKnowingContextRecord,
   worthKnowingFindingsForRun,
 } from "@t3tools/client-runtime/state/worth-knowing";
 import type {
   EnvironmentId,
   RunId,
   ThreadId,
+  WorthKnowingContextRecord,
   WorthKnowingFinding,
   WorthKnowingFindingAction,
   WorthKnowingFindingId,
@@ -28,20 +29,23 @@ const engagedFindingIds = new Set<string>();
 
 // The thread screen owns the composer draft; sheets opened deep in the feed
 // reach it through this registry rather than a provider around the whole screen.
-const askHandlers = new Map<ThreadId, (text: string) => void>();
+const askHandlers = new Map<ThreadId, (record: WorthKnowingContextRecord) => boolean>();
 
-/** Lets this thread's findings append to its composer draft while the screen is open. */
+/**
+ * Lets this thread's findings add a chip to its composer draft while the screen is open.
+ * The handler returns false when the draft could not take the chip.
+ */
 export function useRegisterWorthKnowingAsk(
   threadId: ThreadId,
-  appendToDraft: (text: string) => void,
+  addToDraft: (record: WorthKnowingContextRecord) => boolean,
 ): void {
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- holds this thread's registry entry while the screen is mounted
   useEffect(() => {
-    askHandlers.set(threadId, appendToDraft);
+    askHandlers.set(threadId, addToDraft);
     return () => {
-      if (askHandlers.get(threadId) === appendToDraft) askHandlers.delete(threadId);
+      if (askHandlers.get(threadId) === addToDraft) askHandlers.delete(threadId);
     };
-  }, [threadId, appendToDraft]);
+  }, [threadId, addToDraft]);
 }
 
 /** The thread's findings, newest first, kept live while the thread is open. */
@@ -79,13 +83,13 @@ export function useWorthKnowingActions(environmentId: EnvironmentId) {
         }
       },
       askAgent: (finding: WorthKnowingFinding) => {
-        const appendToDraft = askHandlers.get(finding.threadId);
-        if (appendToDraft === undefined) return;
-        appendToDraft(worthKnowingAgentPrompt(finding));
+        const addToDraft = askHandlers.get(finding.threadId);
+        if (addToDraft === undefined) return;
+        if (!addToDraft(worthKnowingContextRecord(environmentId, finding))) return;
         update(finding, "ask");
       },
     }),
-    [update],
+    [environmentId, update],
   );
 }
 
@@ -95,6 +99,30 @@ function plainText(markdown: string): string {
     .replace(/\*\*(.+?)\*\*/g, "$1")
     .replace(/`([^`]+)`/g, "$1")
     .replace(/^\s*[-*]\s+/gm, "• ");
+}
+
+/** A finding's explanation and quoted evidence, live or as carried by a composer chip. */
+export function WorthKnowingFindingDetails(props: {
+  readonly finding: Pick<WorthKnowingContextRecord, "learn" | "body" | "evidence">;
+}) {
+  const { finding } = props;
+  return (
+    <>
+      <Text selectable className="text-sm text-foreground-secondary">
+        {finding.body.length > 0 ? plainText(finding.body) : finding.learn}
+      </Text>
+      {finding.evidence === null ? null : (
+        <View className="gap-1 border-l-2 border-border pl-2.5">
+          <Text selectable className="font-mono text-xs text-foreground-secondary">
+            {finding.evidence.quote}
+          </Text>
+          {finding.evidence.label === null ? null : (
+            <Text className="text-xs text-foreground-tertiary">{finding.evidence.label}</Text>
+          )}
+        </View>
+      )}
+    </>
+  );
 }
 
 function TextAction(props: {
@@ -140,19 +168,7 @@ function OpenFinding(props: {
           {finding.title}
         </Text>
       </View>
-      <Text selectable className="text-sm text-foreground-secondary">
-        {finding.body.length > 0 ? plainText(finding.body) : finding.learn}
-      </Text>
-      {finding.evidence === null ? null : (
-        <View className="gap-1 border-l-2 border-border pl-2.5">
-          <Text selectable className="font-mono text-xs text-foreground-secondary">
-            {finding.evidence.quote}
-          </Text>
-          {finding.evidence.label === null ? null : (
-            <Text className="text-xs text-foreground-tertiary">{finding.evidence.label}</Text>
-          )}
-        </View>
-      )}
+      <WorthKnowingFindingDetails finding={finding} />
       <View className="flex-row flex-wrap items-center gap-x-4 gap-y-2 pt-0.5">
         {props.canAsk ? <TextAction label={gt("Ask agent")} onPress={props.onAsk} /> : null}
         <TextAction muted label={gt("Knew this")} onPress={() => props.onAnswer("known")} />

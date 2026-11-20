@@ -137,11 +137,13 @@ import {
   captureComposerDraftInsertion,
   getComposerDraftSnapshot,
   setFreshSessionPending,
+  insertComposerDraftContext,
   insertComposerDraftText,
 } from "../../state/use-composer-drafts";
 import { assistantCitationDraftWithinLimit } from "../../lib/composerContext";
 import { serializeAssistantCitation } from "@t3tools/shared/assistantCitations";
-import type { AssistantCitation } from "@t3tools/contracts";
+import type { AssistantCitation, WorthKnowingContextRecord } from "@t3tools/contracts";
+import { formatComposerContextReference } from "@t3tools/shared/composerContextReferences";
 import { RenderErrorBoundary, RenderFailureView } from "../../components/RenderErrorBoundary";
 import {
   ANDROID_READING_MAX_WIDTH,
@@ -1455,18 +1457,27 @@ function ThreadDetailBody(
     composerEditorRef.current?.blur();
   };
 
-  const appendWorthKnowingToDraft = (text: string) => {
-    const currentDraft =
-      props.composerDraftKey === null ? "" : getComposerDraftSnapshot(props.composerDraftKey).text;
-    const nextDraft =
-      currentDraft.trim().length === 0 ? text : `${currentDraft.trimEnd()}\n\n${text}`;
-    props.onChangeDraftMessage(nextDraft);
-    requestAnimationFrame(() => {
-      composerEditorRef.current?.focus();
-      composerEditorRef.current?.setSelection({ start: nextDraft.length, end: nextDraft.length });
-    });
+  const addWorthKnowingToDraft = (record: WorthKnowingContextRecord) => {
+    if (props.composerDraftKey === null) return false;
+    const inserted = insertComposerDraftContext(
+      props.composerDraftKey,
+      {
+        text: formatComposerContextReference(record),
+        context: { version: 1, records: [record] },
+      },
+      captureComposerDraftInsertion(props.composerDraftKey),
+    );
+    if (!inserted) {
+      Dialog.alert(
+        gt("Too many context items"),
+        gt("Remove some context from the draft and try again."),
+      );
+      return false;
+    }
+    requestAnimationFrame(() => composerEditorRef.current?.focus());
+    return true;
   };
-  useRegisterWorthKnowingAsk(props.selectedThread.id, appendWorthKnowingToDraft);
+  useRegisterWorthKnowingAsk(props.selectedThread.id, addWorthKnowingToDraft);
 
   const canCiteAssistantText =
     props.composerDraftKey !== null &&

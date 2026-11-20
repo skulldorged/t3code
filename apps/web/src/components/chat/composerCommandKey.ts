@@ -20,6 +20,7 @@ import {
 import { type PendingUserInput } from "../../session-logic";
 import {
   type EnvironmentContextRecord,
+  type WorthKnowingContextRecord,
   type PreviewAnnotationPayload,
   type ThreadContextRecord,
 } from "@t3tools/contracts";
@@ -77,6 +78,10 @@ export function composerCommandKeyHandler(input: {
     target: ChatComposerProps["composerDraftTarget"],
     records: ReadonlyArray<EnvironmentContextRecord>,
   ) => void;
+  readonly setComposerDraftWorthKnowingContexts: (
+    target: ChatComposerProps["composerDraftTarget"],
+    records: ReadonlyArray<WorthKnowingContextRecord>,
+  ) => void;
   readonly setComposerCursor: Dispatch<SetStateAction<number>>;
   readonly setComposerTrigger: (trigger: ComposerTrigger | null) => void;
   readonly setComposerHighlightedItemId: Dispatch<SetStateAction<string | null>>;
@@ -127,6 +132,7 @@ export function composerCommandKeyHandler(input: {
     setComposerDraftPrompt,
     setComposerDraftThreadContexts,
     setComposerDraftEnvironmentContexts,
+    setComposerDraftWorthKnowingContexts,
     setComposerCursor,
     setComposerTrigger,
     setComposerHighlightedItemId,
@@ -154,6 +160,7 @@ export function composerCommandKeyHandler(input: {
     setComposerDraftPrompt(composerDraftTarget, nextPrompt);
     setComposerDraftThreadContexts(composerDraftTarget, mentions.threadContexts);
     setComposerDraftEnvironmentContexts(composerDraftTarget, mentions.environmentContexts);
+    setComposerDraftWorthKnowingContexts(composerDraftTarget, mentions.worthKnowingContexts);
     setComposerCursor(collapseExpandedComposerCursor(nextPrompt, nextPrompt.length));
     setComposerTrigger(null);
     setComposerHighlightedItemId(null);

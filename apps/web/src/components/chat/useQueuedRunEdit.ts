@@ -14,6 +14,7 @@ import {
   type ChatAttachment,
   type ComposerContextRecord,
   type EnvironmentContextRecord,
+  type WorthKnowingContextRecord,
   type ResponseContextRecord,
   type EnvironmentId,
   type MessageId,
@@ -101,11 +102,12 @@ interface QueuedRunEditContent {
   readonly previewAnnotations: ReadonlyArray<PreviewAnnotationPayload>;
   readonly threadContexts: ReadonlyArray<ThreadContextRecord>;
   readonly environmentContexts: ReadonlyArray<EnvironmentContextRecord>;
+  readonly worthKnowingContexts?: ReadonlyArray<WorthKnowingContextRecord>;
   readonly replyTo?: ResponseContextRecord | null;
 }
 
 const isDraftOwnedRecord = (record: ComposerContextRecord) =>
-  record.kind === "thread" || record.kind === "environment";
+  record.kind === "thread" || record.kind === "environment" || record.kind === "worth-knowing";
 
 async function submitQueuedRunEdit(input: {
   readonly environmentId: EnvironmentId;
@@ -165,6 +167,7 @@ async function submitQueuedRunEdit(input: {
         previewAnnotations: content.previewAnnotations,
         threadContexts: content.threadContexts,
         environmentContexts: content.environmentContexts,
+        worthKnowingContexts: content.worthKnowingContexts ?? [],
         replyTo: content.replyTo ?? null,
         attachments: newAttachments.map((attachment, index) => ({
           attachment,
@@ -280,6 +283,12 @@ export function useQueuedRunEdit(input: {
     store.setEnvironmentContexts(
       target,
       records.filter((record): record is EnvironmentContextRecord => record.kind === "environment"),
+    );
+    store.setWorthKnowingContexts(
+      target,
+      records.filter(
+        (record): record is WorthKnowingContextRecord => record.kind === "worth-knowing",
+      ),
     );
     if (reply) store.setReplyTo(target, reply);
     const threadRef = { environmentId, threadId: activeThreadId };

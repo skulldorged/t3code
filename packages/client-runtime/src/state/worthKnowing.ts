@@ -1,8 +1,14 @@
 import {
   WS_METHODS,
+  type EnvironmentId,
+  type WorthKnowingContextRecord,
   type WorthKnowingFinding,
   type WorthKnowingFindingStatus,
 } from "@t3tools/contracts";
+import {
+  sanitizeComposerContextLabel,
+  toKindScopedComposerContextId,
+} from "@t3tools/shared/composerContextReferences";
 import type { Atom } from "effect/reactivity";
 
 import type * as EnvironmentRegistry from "../connection/registry.ts";
@@ -67,8 +73,29 @@ export function worthKnowingFindingsForRun(
   return findings.filter((finding) => finding.runId === runId);
 }
 
-/** The text handed to the agent when the user asks it about a finding. */
-export function worthKnowingAgentPrompt(finding: WorthKnowingFinding): string {
-  const evidence = finding.evidence === null ? "" : `\n\nIt points to: "${finding.evidence.quote}"`;
-  return `T3's "Worth knowing" observer flagged this about your work: ${finding.learn}${evidence}\n\nIs this right, and what should we do about it?`;
+/** The chip handed to the composer when the user asks the agent about a finding. */
+export function worthKnowingContextRecord(
+  environmentId: EnvironmentId,
+  finding: WorthKnowingFinding,
+): WorthKnowingContextRecord {
+  const title = sanitizeComposerContextLabel(finding.title, "worth-knowing");
+  return {
+    version: 1,
+    kind: "worth-knowing",
+    contextId: toKindScopedComposerContextId("worth-knowing", finding.id),
+    label: title,
+    environmentId,
+    threadId: finding.threadId,
+    findingId: finding.id,
+    title,
+    learn: finding.learn.slice(0, 4_000),
+    body: finding.body.slice(0, 16_000),
+    evidence:
+      finding.evidence === null
+        ? null
+        : {
+            quote: finding.evidence.quote.slice(0, 4_000),
+            label: finding.evidence.label?.slice(0, 2_048) ?? null,
+          },
+  };
 }

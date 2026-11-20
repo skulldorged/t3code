@@ -246,6 +246,9 @@ export async function rewindToMessage(input: {
     store.addEnvironmentContexts(draftTarget, mentions.environmentContexts, {
       appendReference: false,
     });
+    store.addWorthKnowingContexts(draftTarget, mentions.worthKnowingContexts, {
+      appendReference: false,
+    });
     const images: ComposerImageAttachment[] = [];
     const restoredFiles: ComposerFileAttachment[] = [];
     files.forEach((file, index) => {
@@ -321,6 +324,14 @@ export function restoreComposerDraft(
     withRestored(
       current?.environmentContexts,
       snapshot.environmentContexts,
+      (record) => record.contextId,
+    ),
+  );
+  store.setWorthKnowingContexts(
+    draftTarget,
+    withRestored(
+      current?.worthKnowingContexts,
+      snapshot.worthKnowingContexts,
       (record) => record.contextId,
     ),
   );

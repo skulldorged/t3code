@@ -30,6 +30,7 @@ export const COMPOSER_CONTEXT_KINDS = [
   "thread",
   "environment",
   "response",
+  "worth-knowing",
 ] as const;
 export type KnownComposerContextKind = (typeof COMPOSER_CONTEXT_KINDS)[number];
 
@@ -254,6 +255,30 @@ export const ResponseContextRecord = Schema.Struct({
 });
 export type ResponseContextRecord = typeof ResponseContextRecord.Type;
 
+/**
+ * Something T3's Worth knowing observer raised about a thread, which the user is asking the
+ * agent about. The finding travels whole, so the agent needs no tool to read it.
+ */
+export const WorthKnowingContextRecord = Schema.Struct({
+  ...recordBase,
+  kind: Schema.Literal("worth-knowing"),
+  environmentId: EnvironmentId,
+  threadId: ThreadId,
+  findingId: TrimmedNonEmptyString.check(Schema.isMaxLength(CONTEXT_ID_MAX_CHARS)),
+  title: ContextLabel,
+  /** One plain sentence stating what to know. */
+  learn: BoundedString(4_000),
+  /** The observer's short markdown explanation. */
+  body: BoundedString(16_000),
+  evidence: Schema.NullOr(
+    Schema.Struct({
+      quote: BoundedString(4_000),
+      label: NullableShortString,
+    }),
+  ),
+});
+export type WorthKnowingContextRecord = typeof WorthKnowingContextRecord.Type;
+
 const isJson = Schema.is(Schema.Json);
 
 /** Excludes known discriminators so malformed known records fail their own schema. */
@@ -286,6 +311,7 @@ export const KnownComposerContextRecord = Schema.Union([
   ThreadContextRecord,
   EnvironmentContextRecord,
   ResponseContextRecord,
+  WorthKnowingContextRecord,
 ]);
 export type KnownComposerContextRecord = typeof KnownComposerContextRecord.Type;
 
