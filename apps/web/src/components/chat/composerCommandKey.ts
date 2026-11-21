@@ -63,7 +63,6 @@ export function composerCommandKeyHandler(input: {
   readonly composerPreviewAnnotations: ReadonlyArray<PreviewAnnotationPayload>;
   readonly composerReviewComments: ReadonlyArray<ReviewCommentContext>;
   readonly composerEditorRef: RefObject<ComposerPromptEditorHandle | null>;
-  readonly composerMenuOpenRef: RefObject<boolean>;
   readonly composerMenuItemsRef: RefObject<ComposerCommandItem[]>;
   readonly activeComposerMenuItemRef: RefObject<ComposerCommandItem | null>;
   readonly setComposerDraftPrompt: (
@@ -126,7 +125,6 @@ export function composerCommandKeyHandler(input: {
     composerPreviewAnnotations,
     composerReviewComments,
     composerEditorRef,
-    composerMenuOpenRef,
     composerMenuItemsRef,
     activeComposerMenuItemRef,
     setComposerDraftPrompt,
@@ -243,8 +241,7 @@ export function composerCommandKeyHandler(input: {
       return applyListEdit(event, listOutdentForTab);
     }
     const { trigger } = resolveActiveComposerTrigger();
-    const menuIsActive =
-      !isLiteralPendingAnswer && (composerMenuOpenRef.current || trigger !== null);
+    const menuIsActive = !isLiteralPendingAnswer && trigger !== null;
     if (key === "Escape") {
       if (event.isComposing || event.keyCode === 229) return false;
       if (!menuIsActive && promptSuggestion !== null && promptRef.current.length === 0) {
@@ -253,10 +250,13 @@ export function composerCommandKeyHandler(input: {
       }
       if (!menuIsActive) return false;
       dismissComposerTrigger(trigger);
-      composerMenuOpenRef.current = false;
       return true;
     }
-    if (menuIsActive && (submissionIntent === null || submissionIntent === "foreground")) {
+    if (
+      menuIsActive &&
+      !event.shiftKey &&
+      (submissionIntent === null || submissionIntent === "foreground")
+    ) {
       const currentItems = composerMenuItemsRef.current;
       const selectedItem = activeComposerMenuItemRef.current ?? currentItems[0];
       if (key === "ArrowDown" && currentItems.length > 0) {
