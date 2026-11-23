@@ -48,6 +48,28 @@ const MachineState = Schema.Struct({
 });
 export type MachineState = typeof MachineState.Type;
 
+const WorkingPoint = Schema.Struct({
+  ...Window.fields,
+  /** Turns finished inside the window, per minute; higher is better. */
+  turnsPerMin: Schema.Number,
+  /** Send to the agent's first API request. */
+  toRequestMs: Spread,
+  /** The turn's last reply byte to the client seeing the run end. */
+  turnEndMs: Spread,
+  /** Send to the client seeing the run end. */
+  turnMs: Spread,
+});
+export type WorkingPoint = typeof WorkingPoint.Type;
+
+const Reconnect = Schema.Struct({
+  clients: Schema.Number,
+  threadsPerClient: Schema.optional(Schema.Number),
+  /** Drop to every subscription delivering its snapshot again. */
+  resubscribedMs: Schema.Number,
+  loopDelayP99Ms: Schema.Number,
+  loopDelayMaxMs: Schema.Number,
+});
+
 /** One pass over the scenarios. */
 export const Measured = Schema.Struct({
   /** What else the machine was doing during the pass; never compared, only warned about. */
@@ -64,13 +86,25 @@ export const Measured = Schema.Struct({
     Schema.Struct({
       /** The quiet window by subscribed thread count. */
       attached: Schema.Record(Schema.String, Window),
-      /** Every client drops and reconnects at once. */
-      storm: Schema.Struct({
-        clients: Schema.Number,
-        resubscribedMs: Schema.Number,
-        loopDelayP99Ms: Schema.Number,
-        loopDelayMaxMs: Schema.Number,
-      }),
+      /** A user's few devices, each holding the shell, VCS status and threads, drop and reconnect. */
+      reconnect: Schema.optional(Reconnect),
+      /** With --stress: 20 clients holding one thread each drop and reconnect at once. */
+      storm: Schema.optional(Reconnect),
+    }),
+  ),
+  /**
+   * N threads in worktrees of their own run editing turns back to back, all at once, with one
+   * web-like client subscribed to all of them. The scenario to steer server performance by.
+   */
+  working: Schema.optional(
+    Schema.Struct({
+      /** Each window by the number of threads working in it. */
+      active: Schema.Record(Schema.String, WorkingPoint),
+      /** Fits over the windows: what each additional working thread costs. */
+      heapMBPerThread: Schema.Number,
+      rssMBPerThread: Schema.Number,
+      cpuPctPerThread: Schema.Number,
+      loopDelayP99MsPerThread: Schema.Number,
     }),
   ),
   /** 50 short turns back to back on one thread. */
@@ -237,18 +271,39 @@ export const NOISE_RULES: ReadonlyArray<NoiseRule> = [
   informational(/^(rest|quiet|streaming|clients\.attached\.\d+)\.loopDelay(P99|Max)Ms$/),
   informational(/^(rest|quiet|clients\.attached\.\d+)\.gc(Count|PauseMs)$/),
   informational(/^(streaming|pipeline)\.gcPauseMs$/),
-  informational(/^(pipeline\.loopDelayMaxMs|clients\.storm\.loopDelayP99Ms|quiet\.cpuPct)$/),
+  informational(
+    /^(pipeline\.loopDelayMaxMs|clients\.(storm|reconnect)\.loopDelayP99Ms|quiet\.cpuPct)$/,
+  ),
   informational(/^scaling\.(cpuPct|wakeups)PerThread$/),
   informational(/^clients\.attached\.\d+\.(cpuPct|wakeupsPerSec)$/),
   informational(/^(firstWord\..*|pipeline\.turnEndMs)\.p90$/),
   { pattern: /^scaling\.heapMBPerThread$/, floor: 0.06, gate: true },
   { pattern: /^scaling\.rssMBPerThread$/, floor: 0.2, gate: true },
   { pattern: /^soak\./, floor: 20, gate: true },
+  informational(/^working\.(cpuPct|loopDelayP99Ms)PerThread$/),
+  informational(/^working\.active\.\d+\.(wakeupsPerSec|loopDelayMaxMs|gcPauseMs)$/),
+  { pattern: /^working\.heapMBPerThread$/, floor: 0.06, gate: true },
+  { pattern: /^working\.rssMBPerThread$/, floor: 0.2, gate: true },
+  { pattern: /^working\.active\.\d+\.turnsPerMin$/, floor: 4, gate: true },
+  { pattern: /^working\.active\.\d+\.toRequestMs\.median$/, floor: 1_100, gate: true },
+  { pattern: /^working\.active\.\d+\.turnEndMs\.median$/, floor: 1_700, gate: true },
+  {
+    pattern: /^working\.active\.\d+\.(toRequestMs\.p90|turnMs\.median)$/,
+    floor: 1_900,
+    gate: true,
+  },
+  { pattern: /^working\.active\.\d+\.turnEndMs\.p90$/, floor: 2_200, gate: true },
+  { pattern: /^working\.active\.\d+\.turnMs\.p90$/, floor: 2_800, gate: true },
+  // Peak RSS while 20 agents run swings by a checkpoint's git children; the settled RSS does not.
+  { pattern: /^working\.active\.\d+\.rssPeakMB$/, floor: 170, gate: true },
+  { pattern: /^working\.active\.\d+\.(cpuPct|loopDelayP99Ms)$/, floor: 5, gate: true },
+  { pattern: /^working\.active\.\d+\.gcCount$/, floor: 8, gate: true },
   { pattern: /^startup\.readyMs$/, floor: 600, gate: true },
   { pattern: /^firstWord\./, floor: 600, gate: true },
   { pattern: /^pipeline\.(toRequestMs|turnEndMs)\.median$/, floor: 300, gate: true },
   { pattern: /^pipeline\.(toRequestMs\.p90|msPerTurn)$/, floor: 600, gate: true },
-  { pattern: /^clients\.storm\.resubscribedMs$/, floor: 200, gate: true },
+  // The reconnect had no A/A run yet and takes the storm's floors.
+  { pattern: /^clients\.(storm|reconnect)\.resubscribedMs$/, floor: 200, gate: true },
   { pattern: /^rest\.cpuPct$/, floor: 1, gate: true },
   { pattern: /cpuPct$/, floor: 3.5, gate: true },
   { pattern: /^(rest|quiet)\.wakeupsPerSec$/, floor: 12, gate: true },
@@ -270,6 +325,36 @@ export function noiseRule(metric: string, rules: ReadonlyArray<NoiseRule> = NOIS
   return rules.find((rule) => rule.pattern.test(metric)) ?? { floor: 0, gate: true };
 }
 
+/** An error and the errors it wraps as one line, outermost first, repeats left out. */
+export function describeFailure(error: unknown): string {
+  const parts: string[] = [];
+  const seen = new Set<unknown>();
+  for (let at = error; at !== undefined && at !== null && !seen.has(at);) {
+    seen.add(at);
+    if (typeof at !== "object") {
+      parts.push(String(at));
+      break;
+    }
+    const tag = "_tag" in at && typeof at._tag === "string" ? at._tag : undefined;
+    const message = "message" in at && typeof at.message === "string" ? at.message.trim() : "";
+    const text = message || tag || String(at);
+    if (!parts.some((part) => part.includes(text))) parts.push(text);
+    at = "cause" in at ? at.cause : undefined;
+  }
+  return parts.join(": ");
+}
+
+/** Why two files cannot be compared at all: a quick run measures shorter windows than a full one. */
+export function profileMismatch(before: ServerMetrics, after: ServerMetrics) {
+  const profile = (metrics: ServerMetrics) => metrics.meta.profile ?? "full";
+  return profile(before) === profile(after)
+    ? undefined
+    : `before is a ${profile(before)} run and after a ${profile(after)} one; compare quick runs only with quick runs`;
+}
+
+/** Throughput, where a drop is the regression. */
+export const higherIsBetter = (metric: string) => metric.endsWith("PerMin");
+
 /** Fields that describe a run rather than measure it. */
 const isMetric = (metric: string) =>
   !(
@@ -279,6 +364,7 @@ const isMetric = (metric: string) =>
     metric === "busy.projects" ||
     metric === "busy.ballastMB" ||
     metric.endsWith(".clients") ||
+    metric.endsWith(".threadsPerClient") ||
     metric.endsWith(".threads") ||
     metric === "busy.largeThread.messages" ||
     metric.startsWith("scaling.points")
@@ -465,7 +551,7 @@ export function compareMetrics(
   const a = collect(before);
   const b = collect(after);
   const lines = [
-    "### Server metrics (lower is better)",
+    "### Server metrics (lower is better, except throughput per minute)",
     "",
     `before \`${before.meta.commit}\` (${before.runs.length} runs), after \`${after.meta.commit}\` (${after.runs.length} runs), ${after.meta.platform}${after.meta.noAgentScope ? ", no agent scope" : ""}`,
     "",
@@ -499,7 +585,8 @@ export function compareMetrics(
     const limit = Math.max(rule.floor, (Math.abs(mx) * threshold) / 100);
     const repeated = x.length > 1 && y.length > 1;
     const [low, high] = repeated ? bootstrapMedianDifference(x, y) : [my - mx, my - mx];
-    const moved = low > limit ? "worse" : high < -limit ? "better" : "";
+    const up = low > limit ? "worse" : high < -limit ? "better" : "";
+    const moved = higherIsBetter(metric) ? { worse: "better", better: "worse", "": "" }[up] : up;
     if (moved && !rule.gate) informational.push(metric);
     else if (moved === "worse") regressed.push(metric);
     else if (moved === "better") improved.push(metric);

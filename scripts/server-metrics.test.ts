@@ -5,12 +5,14 @@ import {
   compareMetrics,
   competingBetween,
   activityRenewalMissed,
+  describeFailure,
   heapGrowth,
   loadWarnings,
   nextActivityReport,
   noiseReport,
   noisePairProblem,
   parsePsCpuTime,
+  profileMismatch,
   parseRunSelection,
   pathRewrites,
   pathSpellings,
@@ -277,6 +279,47 @@ describe("noiseReport", () => {
   });
 });
 
+describe("compareMetrics on working throughput", () => {
+  const working = (turnsPerMin: number) =>
+    ({
+      meta,
+      runs: [
+        {
+          working: {
+            active: {
+              "20": {
+                ...loopAtRest,
+                cpuPct: 90,
+                wakeupsPerSec: 1_600,
+                rssPeakMB: 700,
+                rssMB: 560,
+                heapAfterGcMB: 218,
+                turnsPerMin,
+                toRequestMs: { median: 4_000, p90: 9_000 },
+                turnEndMs: { median: 16_000, p90: 25_000 },
+                turnMs: { median: 24_000, p90: 36_000 },
+              },
+            },
+            heapMBPerThread: 0.2,
+            rssMBPerThread: 0.8,
+            cpuPctPerThread: 0,
+            loopDelayP99MsPerThread: 0,
+          },
+        },
+      ],
+    }) satisfies ServerMetrics;
+  const rules = [{ pattern: /turnsPerMin$/, floor: 2, gate: true }];
+  it.each([
+    ["fewer turns a minute", 20, ["working.active.20.turnsPerMin"], []],
+    ["more turns a minute", 45, [], ["working.active.20.turnsPerMin"]],
+    ["a move under the floor", 34, [], []],
+  ])("%s", (_name, turnsPerMin, regressed, improved) => {
+    const result = compareMetrics(working(33), working(turnsPerMin), 5, rules);
+    expect(result.regressed).toEqual(regressed);
+    expect(result.improved).toEqual(improved);
+  });
+});
+
 describe("compareMetrics on the busy shell snapshot", () => {
   const window = { cpuPct: 1, wakeupsPerSec: 10, rssPeakMB: 500, rssMB: 500, heapAfterGcMB: 200 };
   const busyRun = (shellMs: number, shellKB: number) =>
@@ -303,6 +346,41 @@ describe("compareMetrics on the busy shell snapshot", () => {
     ["40 KB larger, past it", busyRun(190, 140), ["busy.shellKB"]],
   ])("%s", (_name, after, regressed) => {
     expect(compareMetrics(busyRun(190, 100), after).regressed).toEqual(regressed);
+  });
+});
+
+describe("describeFailure", () => {
+  it.each([
+    ["a plain error", new Error("boom"), "boom"],
+    [
+      "an RPC error wrapping the server's",
+      new Error("RpcClientError", { cause: new Error("Command x was already handled") }),
+      "RpcClientError: Command x was already handled",
+    ],
+    ["a tagged error with no message", { _tag: "TimeoutError" }, "TimeoutError"],
+    [
+      "a cause that repeats its wrapper",
+      new Error("lost: gone", { cause: new Error("gone") }),
+      "lost: gone",
+    ],
+    ["a string", "exit 1", "exit 1"],
+  ])("%s", (_name, error, expected) => {
+    expect(describeFailure(error)).toBe(expected);
+  });
+});
+
+describe("profileMismatch", () => {
+  const withProfile = (profile?: string): ServerMetrics => ({
+    meta: profile === undefined ? meta : { ...meta, profile },
+    runs: [],
+  });
+  it.each([
+    ["two full runs", withProfile("full"), withProfile("full"), false],
+    ["a file from before profiles, against a full run", withProfile(), withProfile("full"), false],
+    ["two quick runs", withProfile("quick"), withProfile("quick"), false],
+    ["a full run against a quick one", withProfile(), withProfile("quick"), true],
+  ])("%s", (_name, before, after, refused) => {
+    expect(profileMismatch(before, after) !== undefined).toBe(refused);
   });
 });
 
