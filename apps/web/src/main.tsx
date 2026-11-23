@@ -5,6 +5,7 @@ import "@fontsource-variable/inter";
 import "./index.css";
 
 import { isSelfHostedConnect, selfHostedAuth } from "./cloud/selfHostedAuth";
+import { trackKeyboardLayout } from "./keyboardLayout";
 import { hasCloudPublicConfig } from "./cloud/publicConfig";
 import { isElectron } from "./env";
 import { startAppServices } from "./appInit";
@@ -13,6 +14,9 @@ import { whenLocaleReady } from "./i18n/runtime";
 import { chunkLoadState } from "./lib/chunkReloadGuard";
 
 if (isSelfHostedConnect()) void selfHostedAuth.bootstrap();
+const stopTrackingKeyboardLayout = trackKeyboardLayout();
+import.meta.hot?.dispose(stopTrackingKeyboardLayout);
+
 const router = startAppServices();
 
 const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined;
