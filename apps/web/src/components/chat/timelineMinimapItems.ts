@@ -1,5 +1,8 @@
 import { isInternalThreadMessage } from "@t3tools/client-runtime/user-message";
-import { assistantCitationsToPlainText } from "@t3tools/shared/assistantCitations";
+import {
+  assistantCitationsToPlainText,
+  splitsSurrogatePair,
+} from "@t3tools/shared/assistantCitations";
 import { parseThreadLinkHref } from "@t3tools/shared/threadLinks";
 import {
   isAttachmentOnlyBootstrapPrompt,
@@ -104,9 +107,9 @@ export function markdownPlainText(markdown: string): string {
 // The tooltip shows a few lines; bound parsing work for long messages and streaming responses.
 function markdownMinimapPreview(markdown: string | null) {
   if (markdown === null) return null;
-  const compact = markdownNodeText(markdownTree(markdown.slice(0, 1_500)))
-    .replace(/\s+/g, " ")
-    .trim();
+  const compact = markdownPlainText(
+    markdown.slice(0, splitsSurrogatePair(markdown, 1_500) ? 1_499 : 1_500),
+  );
   return compact.length > 0 ? compact : null;
 }
 
