@@ -33,6 +33,7 @@ import * as CloudMintSigner from "./auth/CloudMintSigner.ts";
 import * as RelayHttpApi from "./http/Api.ts";
 import * as SelfHostedAuth from "./auth/SelfHostedAuth.ts";
 import { ManagedEndpointZone, RelayApiZone, RelayDeploymentConfig } from "./zone.ts";
+import { RELAY_WORKER_OBSERVABILITY } from "./deploymentConfig.ts";
 import * as Observability from "./observability.ts";
 import * as DeliveryAttempts from "./agentActivity/DeliveryAttempts.ts";
 import * as AgentActivityRows from "./agentActivity/AgentActivityRows.ts";
@@ -134,13 +135,7 @@ export const layer = Api.make(
       // next to the database (argo, in Finland) and pays that distance once.
       placement: { region: "aws:eu-north-1" },
       domain: relayPublicDomain,
-      // Workers Logs bills per GB, and every request, queue batch, and DO call is
-      // an invocation log. Axiom traces carry the full detail; keep a sample for
-      // crashes and limit errors that never export a span.
-      observability: {
-        enabled: true,
-        logs: { enabled: true, invocationLogs: true, headSamplingRate: 0.01 },
-      },
+      observability: RELAY_WORKER_OBSERVABILITY,
     })),
     Effect.orDie,
   ),
