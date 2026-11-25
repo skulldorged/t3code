@@ -464,28 +464,18 @@ export function resolveTimelineMinimapCurrentIndex(input: {
   return precedingIndex;
 }
 
-function resolveTimelineSideGutter(viewportWidth: number, contentWidth: number): number {
-  if (!Number.isFinite(viewportWidth) || viewportWidth <= 0 || !Number.isFinite(contentWidth)) {
-    return 0;
-  }
-  return Math.max(0, (viewportWidth - Math.min(viewportWidth, contentWidth)) / 2);
-}
-
-export function resolveTimelineMinimapHasPersistentGutter(
-  viewportWidth: number,
-  contentWidth = 768,
-): boolean {
-  return (
-    resolveTimelineSideGutter(viewportWidth, contentWidth) >= TIMELINE_MINIMAP_PERSISTENT_GUTTER
-  );
+export function resolveTimelineMinimapHasPersistentGutter(sideGutter: number): boolean {
+  return sideGutter >= TIMELINE_MINIMAP_PERSISTENT_GUTTER;
 }
 
 const TIMELINE_MINIMAP_HIT_STRIP_LEFT = 32;
 const TIMELINE_MINIMAP_HIT_STRIP_MAX_WIDTH = 40;
 const TIMELINE_MINIMAP_NAVIGATION_REACH = 14;
 
-export function resolveTimelineMinimapHitStrip(viewportWidth: number, contentWidth: number) {
-  const sideGutter = Math.floor(resolveTimelineSideGutter(viewportWidth, contentWidth));
+export function resolveTimelineMinimapHitStrip(measuredSideGutter: number) {
+  const sideGutter = Number.isFinite(measuredSideGutter)
+    ? Math.max(0, Math.floor(measuredSideGutter))
+    : 0;
   if (sideGutter < TIMELINE_MINIMAP_HIT_STRIP_LEFT + TIMELINE_MINIMAP_NAVIGATION_REACH) {
     // Keep a hover target in the gutter, to the left of the sidebar restore handle.
     return { left: 0, width: Math.min(8, sideGutter) };
@@ -1210,7 +1200,6 @@ function deriveTurnFolds(input: {
       if (
         entry.id === visibleCompactionId ||
         timelineEntryIsPersistentResourceCard(entry) ||
-        (entry.kind === "work" && entry.entry.questionAnswer !== undefined) ||
         input.liveSubagentEntryIds.has(entry.id) ||
         input.retainedAssistantReplyEntryIds.has(entry.id)
       ) {
@@ -1751,7 +1740,6 @@ export function deriveMessagesTimelineRows(
       const entry = timelineEntries[index]!;
       if (
         entry.kind !== "work" ||
-        entry.entry.questionAnswer !== undefined ||
         entry.entry.tone === "error" ||
         entry.entry.sourceActivityKind === "runtime.error" ||
         entry.entry.itemType === "system_notice" ||
@@ -1788,9 +1776,7 @@ export function deriveMessagesTimelineRows(
   const latestToolKeepsActivityLive =
     latestRunningToolEntry !== undefined ||
     (latestVisibleToolEntry !== undefined &&
-      (workEntryIndicatesToolSuccess(latestVisibleToolEntry.entry) ||
-        (latestVisibleToolEntry.entry.toolLifecycleStatus === "completed" &&
-          !workEntryDisplayIndicatesToolFailure(latestVisibleToolEntry.entry))) &&
+      workEntryIndicatesToolSuccess(latestVisibleToolEntry.entry) &&
       !input.pendingApprovalRequestIds?.size);
   const latestToolFailed =
     latestRunningToolEntry === undefined &&
@@ -2070,7 +2056,6 @@ export function deriveMessagesTimelineRows(
         (timelineEntry.entry.runId != null && itemizedRunIds.has(timelineEntry.entry.runId)) ||
         (timelineEntry.entry.itemType === "error" &&
           timelineEntry.entry.toolLifecycleStatus === "failed") ||
-        timelineEntry.entry.questionAnswer !== undefined ||
         timelineEntry.entry.tone === "error" ||
         timelineEntry.entry.sourceActivityKind === "runtime.error" ||
         timelineEntry.entry.itemType === "system_notice" ||
@@ -2094,7 +2079,6 @@ export function deriveMessagesTimelineRows(
         if (
           !nextEntry ||
           nextEntry.kind !== "work" ||
-          nextEntry.entry.questionAnswer !== undefined ||
           nextEntry.entry.sourceActivityKind === "context-compaction" ||
           (nextEntry.entry.itemType === "error" &&
             nextEntry.entry.toolLifecycleStatus === "failed") ||
