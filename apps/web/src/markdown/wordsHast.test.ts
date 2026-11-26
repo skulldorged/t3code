@@ -96,6 +96,10 @@ const CASES: ReadonlyArray<readonly [markdown: string, html: string]> = [
     '<ul dir="ltr">\n<li>wide</li>\n<li><a href="./x.ts">x</a> items</li>\n</ul>\n<p dir="ltr">text</p>\n<ul dir="ltr">\n<li>\n<p>loose</p>\n</li>\n<li>\n<p>items</p>\n</li>\n</ul>',
   ],
   [
+    '-       :codex-file-citation{path="src/a.ts"}\n-       :codex-followup[Run tests]{prompt="Run tests"}',
+    '<ul dir="ltr">\n<li><a href="src/a.ts">a.ts</a></li>\n<li><span>Run tests</span></li>\n</ul>',
+  ],
+  [
     "> [!TIP]**joined**",
     '<blockquote dir="ltr">\n<p>[!TIP]<strong>joined</strong></p>\n</blockquote>',
   ],
@@ -220,6 +224,15 @@ describe("wordsHast", () => {
       }),
     ).toBe(
       '<ul dir="ltr">\n<li>wide<br>\n<span data-leading-whitespace="">  </span>continued</li>\n</ul>',
+    );
+    // The tab after five spaces only reaches column 8, so `bar` sits two columns past `foo`.
+    expect(
+      wordsHtml("-     \tfoo\n          bar", {
+        breaks: true,
+        extensions: { userMessage: true, leadingWhitespace: true },
+      }),
+    ).toBe(
+      '<ul dir="ltr">\n<li>foo<br>\n<span data-leading-whitespace="">  </span>bar</li>\n</ul>',
     );
   });
 
