@@ -311,6 +311,7 @@ interface ActiveOpenCodeTurn {
   readonly providerTurn: OrchestrationV2ProviderTurn;
   nextItemOrdinal: number;
   nativeUserMessageId: string | null;
+  unsentRootPromptId: string | null;
   admissionMessageId: string | null;
   readonly priorWakePromptIds: Set<string>;
   priorWakeSettled: Deferred.Deferred<void> | null;
@@ -1281,6 +1282,7 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
           turn: ActiveOpenCodeTurn,
           status: OrchestrationV2ProviderTurn["status"],
           completedAt: DateTime.Utc | null,
+          promptDropped = false,
         ) => {
           const providerTurn: OrchestrationV2ProviderTurn = {
             ...turn.providerTurn,
@@ -1290,6 +1292,7 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
                 : providerRef(turn.nativeUserMessageId, "weak"),
             status,
             completedAt,
+            ...(promptDropped ? { promptDropped: true } : {}),
             ...(completedAt === null
               ? {}
               : {
@@ -2318,7 +2321,9 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
                   ),
                 ).pipe(Effect.exit);
               }
-              yield* emitProviderTurn(state, turn, status, completedAt);
+              // OpenCode can save a submitted prompt after acknowledging Stop.
+              const promptDropped = status === "interrupted" && turn.unsentRootPromptId !== null;
+              yield* emitProviderTurn(state, turn, status, completedAt, promptDropped);
               const threadDisposition = terminal?.threadDisposition ?? "reusable";
               yield* updateProviderThread(state, {
                 status: turn.isRoot ? "active" : threadDisposition === "broken" ? "error" : "idle",
@@ -2388,6 +2393,7 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
                       runOrdinal: turn.runOrdinal,
                       status,
                       failure: null,
+                      ...(promptDropped ? { promptDropped: true as const } : {}),
                       threadDisposition,
                     },
               );
@@ -2534,6 +2540,7 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
             providerTurn,
             nextItemOrdinal: 1,
             nativeUserMessageId: message.id,
+            unsentRootPromptId: null,
             admissionMessageId: null,
             priorWakePromptIds: new Set(),
             priorWakeSettled: null,
@@ -3543,6 +3550,16 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
           abortController: AbortController,
           messageText: string,
         ) {
+          const sendIfLive =
+            <A>(send: (signal: AbortSignal) => Promise<A>) =>
+            async (signal: AbortSignal) => {
+              const requestSignal = AbortSignal.any([signal, abortController.signal]);
+              if (requestSignal.aborted || !turnIsLive(state, turn)) return;
+              if (turn.unsentRootPromptId === inputPayload.messageID) {
+                turn.unsentRootPromptId = null;
+              }
+              return send(requestSignal);
+            };
           const { variant, ...payloadWithoutVariant } = inputPayload;
           const selectedVariant = yield* OpenCodeRuntime.resolveOpenCodeVariant(
             client,
@@ -3557,16 +3574,16 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
           };
           const match = messageText.trim().match(/^\/(\S+)(?:\s+([\s\S]*))?$/);
           const command = match
-            ? (yield* OpenCodeRuntime.loadOpenCodeCommands(client).pipe(
+            ? (yield* OpenCodeRuntime.loadOpenCodeCommands(client, abortController.signal).pipe(
                 Effect.timeout("10 seconds"),
                 Effect.orElseSucceed(() => []),
               )).find((entry) => entry.name === match[1])
             : undefined;
           if (!command) {
-            return yield* sdkCall("session.promptAsync", payload, (signal) =>
-              client.session.promptAsync(payload, {
-                signal: AbortSignal.any([signal, abortController.signal]),
-              }),
+            return yield* sdkCall(
+              "session.promptAsync",
+              payload,
+              sendIfLive((signal) => client.session.promptAsync(payload, { signal })),
             ).pipe(Effect.asVoid);
           }
           const receipt = Deferred.makeUnsafe<void>();
@@ -3588,10 +3605,10 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
             ...(payload.variant ? { variant: payload.variant } : {}),
             parts: payload.parts?.filter((part) => part.type === "file") ?? [],
           };
-          const request = yield* sdkCall("session.command", commandPayload, (signal) =>
-            client.session.command(commandPayload, {
-              signal: AbortSignal.any([signal, abortController.signal]),
-            }),
+          const request = yield* sdkCall(
+            "session.command",
+            commandPayload,
+            sendIfLive((signal) => client.session.command(commandPayload, { signal })),
           ).pipe(
             Effect.asVoid,
             // OpenCode answers only when generation ends; once admitted, the event stream owns the outcome.
@@ -3810,6 +3827,7 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
                 providerTurn,
                 nextItemOrdinal: turnInput.providerTurnOrdinal * 100 + 1,
                 nativeUserMessageId: null,
+                unsentRootPromptId: isCompaction ? null : admissionMessageId,
                 admissionMessageId,
                 priorWakePromptIds: new Set(),
                 priorWakeSettled: null,
