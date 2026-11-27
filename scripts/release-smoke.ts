@@ -42,6 +42,7 @@ const workspaceFiles = [
   "packages/provider-opencode/package.json",
   "packages/provider-zcode/package.json",
   "packages/provider-kimi/package.json",
+  "packages/issue-tracker-jira/package.json",
   "packages/issue-tracker-linear/package.json",
   "packages/secret-provider-core/package.json",
   "packages/secret-provider-definitions/package.json",
