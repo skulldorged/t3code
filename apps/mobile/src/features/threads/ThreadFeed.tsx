@@ -220,7 +220,10 @@ import { Menu } from "../../components/ui/Menu";
 import { useAndroidControlSizing } from "../../components/ui/useAndroidControlSizing";
 import { useBarInset, useContentTopInset } from "../../components/ui/useBarInset";
 import { copyPromptLink } from "../prompt-links/prompt-link-actions";
-import { parseReviewCommentMessageSegments } from "../review/reviewCommentSelection";
+import {
+  parseReviewCommentMessageSegments,
+  reviewCommentChipLabel,
+} from "../review/reviewCommentSelection";
 import {
   ReviewCommentCard,
   useReviewCommentColors,
@@ -2832,6 +2835,7 @@ type UserMessageContentProps = {
 
 function UserMessageContent(props: UserMessageContentProps) {
   const gt = useGT();
+  const messages = useMessages();
   const [selected, setSelected] = useState<{ contextId: string; label: string } | null>(null);
   const navigation = useNavigation();
   const openThreadLink = useOpenThreadLink(props.environmentId);
@@ -2845,9 +2849,17 @@ function UserMessageContent(props: UserMessageContentProps) {
     ),
   );
   const threadIcons = useThreadChipIcons(props.environmentId, liveText, props.context?.records);
+  const displayLabel = (label: string, contextId: string) => {
+    const record = props.context?.records.find((item) => item.contextId === contextId);
+    return record?.kind === "review-comment" && "rangeLabel" in record
+      ? reviewCommentChipLabel(label, record.rangeLabel, messages)
+      : label;
+  };
   const text = replaceComposerContextReferences(liveText, (ref) => {
     const available = props.context?.records.some((record) => record.contextId === ref.contextId);
-    const label = available ? ref.label : gt("{label} (unavailable)", { label: ref.label });
+    const label = available
+      ? displayLabel(ref.label, ref.contextId)
+      : gt("{label} (unavailable)", { label: ref.label });
     return `[${label}](t3-context://v1/${ref.kind}/${ref.contextId})`;
   });
   const onLinkPress = (href: string) => {
@@ -2878,7 +2890,7 @@ function UserMessageContent(props: UserMessageContentProps) {
     }
     setSelected({
       contextId: reference.contextId,
-      label: record?.label ?? gt("Context unavailable"),
+      label: record ? displayLabel(record.label, record.contextId) : gt("Context unavailable"),
     });
   };
   return (
