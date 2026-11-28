@@ -320,7 +320,7 @@ function xml(
           // A foreign attribute must not shadow an XHTML table span or a namespace declaration.
           return (extension === ".epub" &&
             (local === "colspan" || local === "rowspan" || local === "xmlns")) ||
-            ((extension === ".odt" || wordStyles !== undefined) && local === "xmlns")
+            ((odf || wordStyles !== undefined) && local === "xmlns")
             ? [[key, String(value)]]
             : [
                 [key, String(value)],
@@ -516,6 +516,10 @@ function xml(
       (extension === ".odp" &&
         node.name === "page-thumbnail" &&
         stack.some((ancestor) => ancestor.name === "notes")) ||
+      // Calc anchors floating shapes inside cells; their text is not cell data.
+      (extension === ".ods" &&
+        parent.name === "table-cell" &&
+        namespaceOf(tag.name, [...stack, node]) === ODF_DRAW_NS) ||
       (isCompatibilityChoice && parent.hasSelectedChoice)
     ) {
       parent.children.pop();
@@ -907,8 +911,10 @@ function* inCell(parts: Iterable<TextPart>): Generator<TextPart, void> {
 }
 function repeatCount(value: string | undefined): number {
   if (value === undefined) return 1;
-  if (!/^[0-9]+$/.test(value) || Number(value) < 1) throw new Error("Invalid repeat count");
-  return Number(value);
+  const count = Number(value);
+  if (!/^[ \t\r\n]*\+?[0-9]+[ \t\r\n]*$/.test(value) || count < 1)
+    throw new Error("Invalid repeat count");
+  return count;
 }
 function odfValue(cell: XmlNode): string {
   const type = cell.attrs["office:value-type"] ?? cell.attrs["value-type"];

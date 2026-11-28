@@ -295,6 +295,15 @@ describe("document preview contents", () => {
     expect(underlines.pages[0]!.html).toBe(
       "<p data-rtf-whitespace><u>single</u> <u>double</u> plain <u>words</u> <u>dotted</u> <u>wave</u> color</p>",
     );
+    const scripts = openRtf(
+      bytes(
+        String.raw`{\rtf1\ansi{\strike old} \strike on\strike0  off \striked1 dbl\striked0  plain x\super 2\nosupersub+H\sub 2\super+\nosupersub O {\sub scoped} \strike\super both\plain  reset}`,
+      ),
+    );
+    if (scripts.type !== "document") throw new Error("Expected document");
+    expect(scripts.pages[0]!.html).toBe(
+      "<p data-rtf-whitespace><s>old</s> <s>on</s> off <s>dbl</s> plain x<sup>2</sup>+H<sub>2</sub><sup>+</sup>O <sub>scoped</sub> <sup><s>both</s></sup> reset</p>",
+    );
   });
 
   it("breaks lines at the paragraph and line breaks TextEdit writes", () => {
@@ -836,6 +845,34 @@ Third}`;
     );
   });
 
+  it("keeps ODT ruby readings apart from their base text", async () => {
+    const xml =
+      '<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"><office:body><office:text>' +
+      '<text:p>Read <text:ruby text:style-name="Ru1"><text:ruby-base>漢字</text:ruby-base><text:ruby-text>かんじ</text:ruby-text></text:ruby> here.</text:p>' +
+      "</office:text></office:body></office:document-content>";
+    const result = await openDocument(new JSZip().file("content.xml", xml), "odt");
+    if (result.type !== "document") throw new Error("Expected document");
+    expect(result.pages[0]!.html).toBe("<p>Read <ruby>漢字<rt>かんじ</rt></ruby> here.</p>");
+  });
+
+  it("respects ODT hidden text and hidden paragraph fields", async () => {
+    // Field markup as LibreOffice Writer 24.2 saves it: no text:is-hidden, and the field text only in
+    // text:string-value.
+    const xml =
+      '<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"><office:body><office:text>' +
+      '<text:p>Gate code <text:hidden-text text:condition="ooow:1" text:string-value="4471 (staff only)"/>is posted.</text:p>' +
+      '<text:p>Shown field <text:hidden-text text:condition="ooow:0" text:string-value="visible note"/><text:s/>end.</text:p>' +
+      '<text:p><text:hidden-paragraph text:condition="ooow:1"/>Internal margin is 42%.</text:p>' +
+      '<text:p><text:hidden-paragraph text:condition="ooow:0" text:is-hidden="true"/>Kept paragraph.</text:p>' +
+      '<text:p>Outer <draw:frame><draw:text-box><text:p><text:hidden-paragraph text:condition="ooow:1"/>Boxed.</text:p></draw:text-box></draw:frame>stays.</text:p>' +
+      "</office:text></office:body></office:document-content>";
+    const result = await openDocument(new JSZip().file("content.xml", xml), "odt");
+    if (result.type !== "document") throw new Error("Expected document");
+    expect(result.pages[0]!.html).toBe(
+      "<p>Gate code is posted.</p><p>Shown field visible note<span data-odf-whitespace> </span>end.</p><p>Kept paragraph.</p><p>Outer stays.</p>",
+    );
+  });
+
   it("maps ODT heading outline levels to HTML heading tags", async () => {
     const xml =
       '<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"><office:body><office:text><text:h text:outline-level="1">1</text:h><text:h text:outline-level="2">2</text:h><text:h text:outline-level="3">3</text:h><text:h text:outline-level="6">6</text:h><text:h text:outline-level="10">10</text:h><text:h text:outline-level="0">0</text:h><text:h text:outline-level="1.5">1.5</text:h><text:h text:outline-level="abc">abc</text:h><text:h>none</text:h></office:text></office:body></office:document-content>';
@@ -1088,6 +1125,8 @@ Third}`;
           <item id="chapter" href="book/chapter.xhtml" media-type="application/xhtml+xml" media-overlay="read"/>
           <item id="read" href="overlays/chapter.smil" media-type="application/smil+xml"/>
           <item id="captions" href="captions.xml" media-type="application/ttml+xml"/>
+          <item id="captions-dfxp" href="captions-dfxp.xml" media-type="application/ttaf+xml"/>
+          <item id="captions-ext" href="captions-ext.dfxp" media-type="application/xml"/>
           <item id="clip" href="clip.mp4" media-type="video/mp4"/>
         </manifest><spine><itemref idref="chapter"/></spine></package>`,
       )
@@ -1095,6 +1134,8 @@ Third}`;
         "book/chapter.xhtml",
         `<html><body><p id="line-1">First line</p>
           <video autoplay=""><track kind="captions" srclang="en" label="English" src="../captions.xml" default=""/>
+          <track kind="captions" srclang="fr" label="French" src="../captions-dfxp.xml"/>
+          <track kind="captions" srclang="es" label="Spanish" src="../captions-ext.dfxp"/>
           <track kind="captions" src="https://example.test/remote.vtt"/>
           <source src="../clip.mp4#t=00:01:00,00:02:00"/><source src="../clip.mp4#t=,120"/>
           <source src="../clip.mp4#t=npt:2.5,4.25"/></video>
@@ -1106,6 +1147,14 @@ Third}`;
           <div><p begin="500ms" dur="2s">Tea &amp; coffee<br/>served.</p></div>
           <p begin="500ms" end="2s">Thanks.</p>
         </div></body></tt>`,
+      )
+      .file(
+        "captions-dfxp.xml",
+        `<tt xmlns="http://www.w3.org/2006/04/ttaf1"><body><div><p begin="0s" end="1.5s">Bonjour.</p></div></body></tt>`,
+      )
+      .file(
+        "captions-ext.dfxp",
+        `<tt xmlns="http://www.w3.org/2006/04/ttaf1"><body><div><p begin="1s" dur="1.5s">Hola.</p></div></body></tt>`,
       )
       .file(
         "overlays/chapter.smil",
@@ -1120,14 +1169,25 @@ Third}`;
     const page = await (await openEpub(archive)).page(0);
     try {
       const tracks = page.html.match(/<track [^>]*>/g);
-      expect(tracks).toHaveLength(1);
+      expect(tracks).toHaveLength(3);
       expect(tracks?.[0]).toContain('kind="captions" srclang="en" label="English" default');
+      expect(tracks?.[1]).toContain('kind="captions" srclang="fr" label="French"');
+      expect(tracks?.[2]).toContain('kind="captions" srclang="es" label="Spanish"');
       expect(page.html).toContain("<video controls playsinline>");
-      const caption = await fetch(tracks?.[0]?.match(/src="([^"]+)"/)?.[1] ?? "");
-      expect(caption.headers.get("Content-Type")).toBe("text/vtt");
-      expect(await caption.text()).toBe(
-        "WEBVTT\n\n00:00:01.500 --> 00:00:03.500\nTea &amp; coffee\nserved.\n\n00:00:04.000 --> 00:00:05.500\nThanks.\n",
+      const captions = await Promise.all(
+        (tracks ?? []).map(async (track) => {
+          const response = await fetch(track.match(/src="([^"]+)"/)?.[1] ?? "");
+          return { type: response.headers.get("Content-Type"), text: await response.text() };
+        }),
       );
+      expect(captions).toEqual([
+        {
+          type: "text/vtt",
+          text: "WEBVTT\n\n00:00:01.500 --> 00:00:03.500\nTea &amp; coffee\nserved.\n\n00:00:04.000 --> 00:00:05.500\nThanks.\n",
+        },
+        { type: "text/vtt", text: "WEBVTT\n\n00:00:00.000 --> 00:00:01.500\nBonjour.\n" },
+        { type: "text/vtt", text: "WEBVTT\n\n00:00:01.000 --> 00:00:02.500\nHola.\n" },
+      ]);
       expect(page.html.match(/#t=[\d.,]+(?=")/g)).toEqual(["#t=60,120", "#t=0,120", "#t=2.5,4.25"]);
       expect(page.narration).toEqual([
         { src: page.assets.at(-1), begin: 2, end: 3.25, anchor: "line-1" },
@@ -1138,6 +1198,13 @@ Third}`;
   });
 
   it("preserves the SVG filters used by EPUB artwork", async () => {
+    const fxFilter = `<filter id="fx">
+      <feMorphology operator="dilate" radius="1 2"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="3" seed="7" stitchTiles="stitch" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="12" xChannelSelector="R" yChannelSelector="G"/>
+      <feConvolveMatrix order="3" kernelMatrix="0 -1 0 -1 5 -1 0 -1 0" divisor="1" bias="0" targetX="1" targetY="1" edgeMode="duplicate" preserveAlpha="true"/>
+      <feTile in="noise"/>
+    </filter>`;
     const archive = new JSZip()
       .file(
         "META-INF/container.xml",
@@ -1158,12 +1225,13 @@ Third}`;
           </filter>
           <filter id="drop"><feDropShadow dx="2" dy="2" flood-color="gray" flood-opacity="0.5"/></filter>
           <filter id="tone"><feFlood flood-color="red"/><feBlend mode="multiply" in="SourceGraphic"/><feImage href="art.png"/></filter>
+          ${fxFilter}
           <rect width="80" height="80" fill="orange" filter="url(#tint)"/>
         </svg>`,
       )
       .file(
         "fallback.xhtml",
-        '<html><body><p><br></p><svg><filter id="d"><feDropShadow dx="2"/></filter></svg></body></html>',
+        `<html><body><p><br></p><svg><filter id="d"><feDropShadow dx="2"/></filter>${fxFilter}</svg></body></html>`,
       );
     const book = await openEpub(archive);
     const { html } = await book.page(0);
@@ -1179,7 +1247,21 @@ Third}`;
     expect(html).toContain('<feBlend in="SourceGraphic" mode="multiply">');
     expect(html).not.toContain("feImage");
     expect(html).toContain('filter="url(#tint)"');
-    expect((await book.page(1)).html).toContain('<feDropShadow dx="2">');
+    const fallbackHtml = (await book.page(1)).html;
+    expect(fallbackHtml).toContain('<feDropShadow dx="2">');
+    for (const output of [html, fallbackHtml]) {
+      expect(output).toContain('<feMorphology operator="dilate" radius="1 2">');
+      expect(output).toContain(
+        '<feTurbulence result="noise" type="fractalNoise" baseFrequency="0.05" numOctaves="3" seed="7" stitchTiles="stitch">',
+      );
+      expect(output).toContain(
+        '<feDisplacementMap in="SourceGraphic" in2="noise" scale="12" xChannelSelector="R" yChannelSelector="G">',
+      );
+      expect(output).toContain(
+        '<feConvolveMatrix order="3" kernelMatrix="0 -1 0 -1 5 -1 0 -1 0" divisor="1" bias="0" targetX="1" targetY="1" edgeMode="duplicate" preserveAlpha="true">',
+      );
+      expect(output).toContain('<feTile in="noise"></feTile>');
+    }
   });
 
   it("keeps the RGB channel adjustments in EPUB SVG artwork", async () => {
