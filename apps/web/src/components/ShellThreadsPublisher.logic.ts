@@ -98,8 +98,15 @@ export function collectShellThreads(input: ShellThreadsInput): DesktopShellThrea
 
   const describe = (thread: EnvironmentThreadShell): DesktopShellThread => {
     const resolved = resolveSidebarThreadStatus(thread);
-    // The desktop shell has no separate "preparing" state; the sidebar groups it with working.
-    let status = resolved === "preparing" ? "working" : resolved;
+    // The desktop shell has no separate "preparing" or connection states; the sidebar groups
+    // preparing with working, and a connection state only applies to a thread whose run is active.
+    let status =
+      resolved === "preparing" ||
+      resolved === "connecting" ||
+      resolved === "reconnecting" ||
+      resolved === "offline"
+        ? "working"
+        : resolved;
     if (status === "ready" && thread.latestRun?.status === "failed") status = "failed";
     const parent = listedParent(thread);
     const visited = { ...thread, lastVisitedAt: lastVisit(thread) };
