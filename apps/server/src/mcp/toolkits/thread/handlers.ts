@@ -22,6 +22,7 @@ import {
   unavailable,
 } from "../../threadAccess.ts";
 import { providerOptionDescriptors, refuseAgentModePick } from "../../delegatedTaskModes.ts";
+import { firstLineTitle } from "../../firstLineTitle.ts";
 import * as ProviderRegistry from "../../../provider/ProviderRegistry.ts";
 import type * as ThreadManagement from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as ThreadMessageIntake from "../../../orchestration-v2/ThreadMessageIntake.ts";
@@ -233,6 +234,7 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
             return { sequence: result.sequence, targetThreadId };
           }
           const targetThreadId = ThreadId.make(`${commandId}:fork`);
+          const title = firstLineTitle(input.title);
           const result = yield* threads
             .dispatch({
               type: "thread.fork",
@@ -240,7 +242,7 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
               sourceThreadId: projection.thread.id,
               targetThreadId,
               sourcePoint,
-              ...(input.title === undefined ? {} : { title: input.title }),
+              ...(title === undefined ? {} : { title }),
               createdBy: "agent",
               creationSource: "mcp",
             })
