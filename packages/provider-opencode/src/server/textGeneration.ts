@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Schema from "effect/Schema";
 
 import {
@@ -184,6 +185,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
   openCodeSettings: OpenCodeSettings,
 ) {
   const host = yield* ProviderHost.ProviderHost;
+  const fileSystem = yield* FileSystem.FileSystem;
   const openCodeRuntime = yield* OpenCodeRuntime.OpenCodeRuntime;
   const serverOwner = yield* OpenCodeServerOwner.OpenCodeServerOwner;
 
@@ -198,9 +200,10 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
       });
     }
 
-    const fileParts = OpenCodeRuntime.toOpenCodeFileParts({
+    const fileParts = yield* OpenCodeRuntime.toOpenCodeFileParts({
       attachments: input.attachments?.filter((attachment) => attachment.type === "image"),
       resolveAttachmentPath: host.resolveAttachmentPath,
+      fileSystem,
     });
 
     const runAgainstServer = Effect.fn("runOpenCodeJson.runAgainstServer")(
